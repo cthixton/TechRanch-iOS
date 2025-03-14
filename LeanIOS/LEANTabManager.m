@@ -10,9 +10,6 @@
 #import "LEANUtilities.h"
 #import "GonativeIO-Swift.h"
 
-#define TAB_IMAGE_SIZE_REGULAR 34
-#define TAB_IMAGE_SIZE_COMPACT 17
-
 @interface LEANTabManager() <UITabBarDelegate>
 @property UITabBar *tabBar;
 @property NSArray *menu;
@@ -30,6 +27,7 @@
     if (self) {
         self.tabBar = tabBar;
         self.tabBar.delegate = self;
+        self.tabBar.unselectedItemTintColor = [UIColor colorNamed:@"inactiveTabBarItemColor"];
         self.wvc = wvc;
         self.showTabBar = NO;
         self.javascriptTabs = NO;
@@ -91,44 +89,66 @@
     }
 }
 
-- (void)setTabBarItems:(NSArray*) menu
-{
+- (CGFloat)titleOffsetY {
+    if (UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPad) {
+        return 0;
+    }
+    if (self.wvc.traitCollection.verticalSizeClass == UIUserInterfaceSizeClassCompact && self.menu.count < 6) {
+        return -7;
+    }
+    return 0;
+}
+
+- (CGFloat)sizeForIcon:(NSString *)iconName {
+    CGFloat size = 20;
+    if ([iconName hasPrefix:@"custom "]) {
+        size = size * 1.1;
+    } else if ([iconName hasPrefix:@"md "]) {
+        size = size * 1.25;
+    }
+    return size;
+}
+
+- (UITabBarItem *)createOrUpdateTabBarItem:(UITabBarItem *)tabBarItem withTitle:(NSString *)title activeIcon:(NSString *)activeIcon inactiveIcon:(NSString *)inactiveIcon tag:(NSInteger)tag {
+    UITabBarItem *item = tabBarItem;
+    if (!item) {
+        if (!inactiveIcon) {
+            inactiveIcon = activeIcon;
+        }
+        
+        UIImage *activeImage = [LEANIcons imageForIconIdentifier:activeIcon size:[self sizeForIcon:activeIcon] color:[UIColor blackColor]];
+        UIImage *inactiveImage = [LEANIcons imageForIconIdentifier:inactiveIcon size:[self sizeForIcon:inactiveIcon] color:[UIColor blackColor]];
+        item = [[UITabBarItem alloc] initWithTitle:title image:inactiveImage selectedImage:activeImage];
+        item.tag = tag;
+    }
+    
+    [item setTitlePositionAdjustment:UIOffsetMake(0, [self titleOffsetY])];
+    return item;
+}
+
+- (void)setTabBarItems:(NSArray*) menu {
     NSMutableArray *items = [[NSMutableArray alloc] initWithCapacity:[menu count]];
     
     UITabBarItem *selectedItem;
     
     for (NSUInteger i = 0; i < [menu count]; i++) {
         NSString *label = menu[i][@"label"];
-        NSString *iconName = menu[i][@"icon"];
+        NSString *activeIcon = menu[i][@"icon"];
+        NSString *inactiveIcon = menu[i][@"inactiveIcon"];
         
         if (![label isKindOfClass:[NSString class]]) {
             label = @"";
         }
         
-        UIImage *iconImage;
-        float titleOffSetBy = 0;
-        if ([iconName isKindOfClass:[NSString class]]) {
-            if (iconName && [iconName hasPrefix:@"gonative-"]) {
-                iconImage = [UIImage imageNamed:iconName];
-            } else {
-                // the tint color is automatically applied to the button, so a black icon is enough
-                if (self.wvc.traitCollection.verticalSizeClass == UIUserInterfaceSizeClassCompact) {
-                    iconImage = [LEANIcons imageForIconIdentifier:iconName size:TAB_IMAGE_SIZE_COMPACT color:[UIColor blackColor]];
-                    titleOffSetBy = -15;
-                } else {
-                    iconImage = [LEANIcons imageForIconIdentifier:iconName size:TAB_IMAGE_SIZE_REGULAR color:[UIColor blackColor]];
-                    if(UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPad){
-                        titleOffSetBy = -7.5;
-                    }
-                }
-            }
+        if (![activeIcon isKindOfClass:[NSString class]]) {
+            activeIcon = @"md mi-question-mark";
         }
-        UITabBarItem *item = [[UITabBarItem alloc] initWithTitle:label image:iconImage tag:i];
-        [item setTitlePositionAdjustment:UIOffsetMake(0, titleOffSetBy)];
+        
+        UITabBarItem *item = [self createOrUpdateTabBarItem:nil withTitle:label activeIcon:activeIcon inactiveIcon:inactiveIcon tag:i];
         [items addObject:item];
         
         if ([menu[i][@"selected"] boolValue]) {
-            selectedItem = [items lastObject];
+            selectedItem = item;
         }
     }
     
@@ -141,32 +161,17 @@
 
 -(void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection
 {
-    if (previousTraitCollection.verticalSizeClass == self.wvc.traitCollection.verticalSizeClass) return;
-    if (!self.menu) return;
+    if (previousTraitCollection.verticalSizeClass == self.wvc.traitCollection.verticalSizeClass || !self.menu) {
+        return;
+    }
     
-    // we need to resize icons if the vertical size class has changed
+    // Resize title position offset on wide screens
     for (NSUInteger i = 0; i < [self.menu count]; i++) {
-        NSString *iconName = self.menu[i][@"icon"];
-        UIImage *iconImage;
-        if ([iconName isKindOfClass:[NSString class]]) {
-            if (iconName && [iconName hasPrefix:@"gonative-"]) {
-                // no change in image
-                continue;
-            } else {
-                // the tint color is automatically applied to the button, so a black icon is enough
-                if (self.wvc.traitCollection.verticalSizeClass == UIUserInterfaceSizeClassCompact) {
-                    iconImage = [LEANIcons imageForIconIdentifier:iconName size:TAB_IMAGE_SIZE_COMPACT color:[UIColor blackColor]];
-                    [self.tabBar.items[i] setTitlePositionAdjustment:UIOffsetMake(0, -15)];
-                } else {
-                    iconImage = [LEANIcons imageForIconIdentifier:iconName size:TAB_IMAGE_SIZE_REGULAR color:[UIColor blackColor]];
-                    [self.tabBar.items[i] setTitlePositionAdjustment:UIOffsetMake(0, 0)];
-                }
-                
-                if (self.tabBar.items.count > i) {
-                    self.tabBar.items[i].image = iconImage;
-                }
-            }
-        }
+        UITabBarItem *item = self.tabBar.items[i];
+        NSString *label = self.menu[i][@"label"];
+        NSString *activeIcon = self.menu[i][@"icon"];
+        NSString *inactiveIcon = self.menu[i][@"inactiveIcon"];
+        [self createOrUpdateTabBarItem:item withTitle:label activeIcon:activeIcon inactiveIcon:inactiveIcon tag:i];
     }
 }
 
@@ -191,12 +196,20 @@
     if ([cached isKindOfClass:[NSNumber class]]) return nil;
     else {
         NSArray<NSPredicate*>* regex = [self getRegexForTab:tabConfig];
-        if (!regex) {
-            self.tabRegexCache[tabConfig] = (NSArray<NSPredicate*>*)[NSNull null];
-            return nil;
-        } else {
+        NSString *url = tabConfig[@"url"];
+        
+        if (regex) {
             self.tabRegexCache[tabConfig] = regex;
             return regex;
+        }
+        else if ([url isKindOfClass:[NSString class]]) {
+            regex = @[[NSPredicate predicateWithFormat:@"SELF == %@", url]];
+            self.tabRegexCache[tabConfig] = regex;
+            return regex;
+        }
+        else {
+            self.tabRegexCache[tabConfig] = (NSArray<NSPredicate*>*)[NSNull null];
+            return nil;
         }
     }
 }
@@ -209,7 +222,9 @@
     
     for (NSInteger i = 0; i < [self.menu count]; i++) {
         NSArray<NSPredicate*> *regexList = [self getCachedRegexForTab:i];
-        if (!regexList) continue;
+        if (!regexList) {
+            continue;
+        }
         
         for (NSPredicate *regex in regexList) {
             BOOL matches = NO;
@@ -233,30 +248,15 @@
     NSInteger idx = item.tag;
     if (idx < [self.menu count]) {
         NSString *url = self.menu[idx][@"url"];
-        NSString *javascript = self.menu[idx][@"javascript"];
-        
-        if ([url length] > 0) {
-            if ([url hasPrefix:@"javascript:"]) {
-                NSString *js = [url substringFromIndex: [@"javascript:" length]];
-                [self.wvc runJavascript:js];
-            }
-            else if ([javascript length] > 0) {
-                [self.wvc loadUrl:[LEANUtilities urlWithString:url] andJavascript:javascript];
-            } else {
-                [self.wvc loadUrlAfterFilter:[LEANUtilities urlWithString:url]];
-            }
-        }
+        [self.wvc handleJsNavigationUrl:url];
     }
 }
 
-- (void)selectTabWithUrl:(NSString*)url javascript:(NSString*)javascript
-{
+- (void)selectTabWithUrl:(NSString*)url {
     for (NSUInteger i = 0; i < [self.menu count]; i++) {
         NSString *entryUrl = self.menu[i][@"url"];
-        NSString *entryJs = self.menu[i][@"javascript"];
         
-        if ([url isEqualToString:entryUrl] &&
-            ((javascript == nil && entryJs == nil) || [javascript isEqualToString:entryJs])) {
+        if ([url isEqualToString:entryUrl]) {
             UITabBarItem *item = self.tabBar.items[i];
             if (item) {
                 self.tabBar.selectedItem = item;

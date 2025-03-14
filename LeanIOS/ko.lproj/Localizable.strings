@@ -9,3 +9,12 @@
 
 /* Button: Menu */
 "button-menu" = "메뉴";
+
+/* Button: Copy Link */
+"button-copy-link" = "링크 주소 복사";
+
+/* Button: Open External */
+"button-open-external" = "외부 브라우저로 링크 열기";
+
+/* Button: Share External */
+"button-share-link" = "링크 공유";

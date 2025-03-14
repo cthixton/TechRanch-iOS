@@ -296,7 +296,6 @@
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
     
     NSString *url = nil;
-    NSString *javascript = nil;
     BOOL isLogout;
     
     // if is first row, then check if it is grouped.
@@ -307,47 +306,37 @@
         } else {
             NSDictionary *item = self.menuItems[indexPath.section];
             url = item[@"url"];
-            javascript = item[@"javascript"];
             isLogout = [item[@"isLogout"] boolValue];
         }
     } else {
         // regular child
         NSDictionary *item = self.menuItems[indexPath.section][@"subLinks"][indexPath.row - 1];
         url = item[@"url"];
-        javascript = item[@"javascript"];
         isLogout = [item[@"isLogout"] boolValue];
     }
     
-    if (url != nil) {
-        // check for GONATIVE_USERID string.
-        url = [url stringByReplacingOccurrencesOfString:@"GONATIVE_USERID" withString:[LEANUrlInspector sharedInspector].userId];
+    if (url == nil) {
+        return;
+    }
+    
+    // check for GONATIVE_USERID string.
+    url = [url stringByReplacingOccurrencesOfString:@"GONATIVE_USERID" withString:[LEANUrlInspector sharedInspector].userId];
+    [self.wvc handleJsNavigationUrl:url];
+    
+    if (![url hasPrefix:@"javascript:"] && [GoNativeAppConfig sharedAppConfig].injectMedianJS) {
+        [self.wvc.tabManager selectTabWithUrl:url];
         
-        if ([url hasPrefix:@"javascript:"]) {
-            NSString *js = [url substringFromIndex: [@"javascript:" length]];
-            [self.wvc runJavascript:js];
-        } else {
-            // try selecting the corresponding tab (if exists);
-            if (self.wvc.tabManager) {
-                [self.wvc.tabManager selectTabWithUrl:url javascript:javascript];
-            }
-            
-            if ([javascript length] > 0) {
-                [self.wvc loadUrl:[LEANUtilities urlWithString:url] andJavascript:javascript];
-            } else {
-                
-                if(UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPad){
-                    [self.wvc setSharePopOverRect:[tableView rectForRowAtIndexPath:indexPath]]; // save touch location
-                }
-                [self.wvc loadUrlAfterFilter:[LEANUtilities urlWithString:url]];
-            }
+        if (UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPad) {
+            [self.wvc setSharePopOverRect:[tableView rectForRowAtIndexPath:indexPath]];
         }
-        [self.frostedViewController hideMenuViewController];
-        
-        if (isLogout) {
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                [self.wvc logout];
-            });
-        }
+    }
+    
+    [self.frostedViewController hideMenuViewController];
+    
+    if (isLogout) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [self.wvc logout];
+        });
     }
 }
 

@@ -10,6 +10,7 @@
 #import <MobileCoreServices/MobileCoreServices.h>
 #import "GonativeIO-Swift.h"
 #import "LEANUtilities.h"
+#import "LEANPDFManager.h"
 
 @interface LEANDocumentSharer ()
 @property UIDocumentInteractionController *interactionController;
@@ -22,6 +23,7 @@
 @property NSMutableArray *sharableRequests; // array of nsurlrequests
 @property BOOL isFinished;
 @property BOOL isSharableFile;
+@property (nonatomic, copy) void (^downloadImageCompletion)(NSDictionary *result);
 @end
 
 @implementation LEANDocumentSharer
@@ -196,6 +198,10 @@
 }
 
 - (void)shareUrl:(NSURL*)url fromView:(UIView*)view filename:(NSString*)filename {
+    [self shareUrl:url fromView:view filename:filename open:NO completion:nil];
+}
+
+- (void)shareUrl:(NSURL*)url fromView:(UIView*)view filename:(NSString*)filename open:(BOOL)open completion:(void (^)(NSString *error))completion {
     if (!url) return;
     
     NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:url];
@@ -224,22 +230,20 @@
                 if (cookieHeader) {
                     [req addValue:cookieHeader forHTTPHeaderField:@"Cookie"];
                 }
-                [self shareRequest:req from:view force:YES filename:filename];
+                [self shareRequest:req from:view force:YES filename:filename open:open completion:completion];
             }];
         }
     }
     if (!gettingWKWebviewCookies) {
-        [self shareRequest:req from:view force:YES filename:filename];
+        [self shareRequest:req from:view force:YES filename:filename open:open completion:completion];
     }
 }
 
-- (void)shareRequest:(NSURLRequest *)req fromButton:(UIBarButtonItem*) button
-{
-    [self shareRequest:req from:button force:NO filename:nil];
+- (void)shareRequest:(NSURLRequest *)req fromButton:(UIBarButtonItem*)button {
+    [self shareRequest:req from:button force:NO filename:nil open:NO completion:nil];
 }
 
-- (void)shareRequest:(NSURLRequest *)req from:(id) buttonOrView force:(BOOL)force filename:(NSString *)filename
-{
+- (void)shareRequest:(NSURLRequest *)req from:(id)buttonOrView force:(BOOL)force filename:(NSString *)filename open:(BOOL)open completion:(void (^)(NSString *error))completion {
     if (!force && ![self isSharableRequest:req]) {
         return;
     }
@@ -262,9 +266,19 @@
         [[NSFileManager defaultManager] removeItemAtURL:sharedFile error:nil];
         [[NSFileManager defaultManager] copyItemAtURL:self.dataFile toURL:sharedFile error:nil];
         
+        if (!sharedFile) {
+            return [self runCompletion:completion error:@"Invalid local file url."];
+        }
+        
+        if (open && [[LEANPDFManager shared] shouldHandleResponse:self.lastResponse]) {
+            [[LEANPDFManager shared] openPDF:sharedFile wvc:[self topMostViewController]];
+            return [self runCompletion:completion error:nil];
+        }
+        
         // launch the interaction controller
         self.interactionController = [UIDocumentInteractionController interactionControllerWithURL:sharedFile];
         [self.interactionController presentOpenInMenuFromBarButtonItem:button animated:YES];
+        return [self runCompletion:completion error:nil];
     } else {
         // download the file
         NSURLSession *session = [NSURLSession sharedSession];
@@ -274,17 +288,31 @@
                 dispatch_async(dispatch_get_main_queue(), ^{
                     button.enabled = YES;
                 });
-                return;
+                
+                if (error.localizedDescription) {
+                    return [self runCompletion:completion error:error.localizedDescription];
+                } else if (httpResponse.statusCode != 200) {
+                    return [self runCompletion:completion error:[NSString stringWithFormat:@"Received status code %ld", httpResponse.statusCode]];
+                } else if (!location) {
+                    return [self runCompletion:completion error:@"Invalid file location."];
+                } else {
+                    return [self runCompletion:completion error:@"Unknown error."];
+                }
             }
             
             NSFileManager *fileManager = [NSFileManager defaultManager];
-            
             NSURL *documentsDirectoryPath = [NSURL fileURLWithPath:[NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject]];
             NSURL *destination = [documentsDirectoryPath URLByAppendingPathComponent:filename ?: [self getFilenameFromUrlResponse:response]];
             [fileManager removeItemAtURL:destination error:nil];
             [fileManager moveItemAtURL:location toURL:destination error:nil];
             
             dispatch_async(dispatch_get_main_queue(), ^{
+                if (open && [[LEANPDFManager shared] shouldHandleResponse:response]) {
+                    button.enabled = YES;
+                    [[LEANPDFManager shared] openPDF:destination wvc:[self topMostViewController]];
+                    return [self runCompletion:completion error:nil];
+                }
+                
                 self.interactionController = [UIDocumentInteractionController interactionControllerWithURL:destination];
                 self.interactionController.UTI = [LEANUtilities utiFromMimetype:response.MIMEType];
                 if (button) {
@@ -294,13 +322,19 @@
                 } else {
                     [self.interactionController presentOpenInMenuFromRect:CGRectZero inView:[UIApplication sharedApplication].currentKeyWindow animated:YES];
                 }
-                
                 button.enabled = YES;
+                return [self runCompletion:completion error:nil];
             });
         }];
         
         button.enabled = NO;
         [downloadTask resume];
+    }
+}
+
+- (void)runCompletion:(void (^)(NSString *error))completion error:(NSString *)error {
+    if (completion) {
+        completion(error);
     }
 }
 
@@ -327,11 +361,54 @@
     return nil;
 }
 
-- (void)downloadImage:(NSURL*)url {
+- (UIViewController *)topMostViewController {
+    UIViewController *vc = [UIApplication sharedApplication].currentKeyWindow.rootViewController;
+    while (vc.presentedViewController) {
+        vc = vc.presentedViewController;
+    }
+    return vc;
+}
+
+- (void)downloadImage:(NSURL*)url completion:(void (^)(NSDictionary *result))completion {
     if (!url) return;
+    self.downloadImageCompletion = completion;
     NSData *data = [NSData dataWithContentsOfURL:url];
     UIImage *image = [[UIImage alloc] initWithData:data];
-    UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil);
+    UIImageWriteToSavedPhotosAlbum(image, self, @selector(image:didFinishSavingWithError:contextInfo:), nil);
+}
+
+- (void)image:(UIImage *)image didFinishSavingWithError:(NSError *)error contextInfo:(void *)contextInfo {
+    if (self.downloadImageCompletion) {
+        if (error) {
+            self.downloadImageCompletion(@{ @"success": @NO, @"error": error.localizedDescription });
+        } else {
+            self.downloadImageCompletion(@{ @"success": @YES });
+        }
+        self.downloadImageCompletion = nil;
+    }
+}
+
+- (void)shareDataUrl:(NSURL *)url {
+    if (![url.scheme isEqualToString:@"data"]) {
+        return;
+    }
+
+    NSData *data = [NSData dataWithContentsOfURL:url];
+    NSString *dataString = [url.absoluteString stringByReplacingOccurrencesOfString:@"data:" withString:@""];
+    NSString *mimeType = [dataString componentsSeparatedByString:@";"].firstObject;
+    NSString *extension = [mimeType componentsSeparatedByString:@"/"].lastObject;
+    NSString *filename = [NSString stringWithFormat:@"download.%@", extension];
+    NSURL *tempDirectory = [NSURL fileURLWithPath:NSTemporaryDirectory()];
+    NSURL *destination = [tempDirectory URLByAppendingPathComponent:filename];
+    
+    [[NSFileManager defaultManager] removeItemAtURL:destination error:nil];
+    if (![data writeToURL:destination options:NSDataWritingAtomic error:nil]) {
+        return;
+    }
+    
+    self.interactionController = [UIDocumentInteractionController interactionControllerWithURL:destination];
+    self.interactionController.UTI = [LEANUtilities utiFromMimetype:mimeType];
+    [self.interactionController presentOptionsMenuFromRect:CGRectZero inView:[self topMostViewController].view animated:YES];
 }
 
 @end

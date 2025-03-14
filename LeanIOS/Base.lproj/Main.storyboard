@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="18122" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="Bg2-kp-iGG">
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="22505" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="Bg2-kp-iGG">
     <device id="retina5_9" orientation="portrait" appearance="light"/>
     <dependencies>
         <deployment identifier="iOS"/>
-        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="18093"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="22504"/>
         <capability name="Named colors" minToolsVersion="9.0"/>
         <capability name="Safe area layout guides" minToolsVersion="9.0"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
@@ -30,7 +30,7 @@
             <objects>
                 <navigationController storyboardIdentifier="contentController" definesPresentationContext="YES" useStoryboardIdentifierAsRestorationIdentifier="YES" id="9g4-9b-Jzi" customClass="LEANNavigationController" sceneMemberID="viewController">
                     <navigationBar key="navigationBar" contentMode="scaleToFill" id="weu-Ph-Ic2">
-                        <rect key="frame" x="0.0" y="44" width="375" height="44"/>
+                        <rect key="frame" x="0.0" y="50" width="375" height="44"/>
                         <autoresizingMask key="autoresizingMask"/>
                     </navigationBar>
                     <connections>
@@ -51,7 +51,7 @@
                         <color key="backgroundColor" red="0.93725490199999995" green="0.93725490199999995" blue="0.95686274510000002" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                         <prototypes>
                             <tableViewCell contentMode="scaleToFill" selectionStyle="blue" hidesAccessoryWhenEditing="NO" indentationLevel="1" indentationWidth="0.0" reuseIdentifier="temp" id="MMv-Cq-aAD">
-                                <rect key="frame" x="0.0" y="49" width="375" height="44"/>
+                                <rect key="frame" x="0.0" y="55.333332061767578" width="375" height="44"/>
                                 <autoresizingMask key="autoresizingMask"/>
                                 <tableViewCellContentView key="contentView" opaque="NO" clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="center" tableViewCell="MMv-Cq-aAD" id="CkX-sC-tmm">
                                     <rect key="frame" x="0.0" y="0.0" width="375" height="44"/>
@@ -78,32 +78,28 @@
                         <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
                         <subviews>
                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="GBp-Vo-WtS" userLabel="WebviewContainer">
-                                <rect key="frame" x="0.0" y="88" width="375" height="583"/>
+                                <rect key="frame" x="0.0" y="94" width="375" height="591"/>
                                 <color key="backgroundColor" red="1" green="1" blue="1" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                             </view>
-                            <activityIndicatorView hidden="YES" opaque="NO" userInteractionEnabled="NO" contentMode="scaleToFill" horizontalHuggingPriority="750" verticalHuggingPriority="750" hidesWhenStopped="YES" style="whiteLarge" translatesAutoresizingMaskIntoConstraints="NO" id="vcS-3e-fYP">
-                                <rect key="frame" x="169" y="387.66666666666669" width="37" height="37"/>
-                                <color key="color" red="0.5" green="0.5" blue="0.5" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
-                            </activityIndicatorView>
                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="mys-1p-egd" userLabel="Plugin View">
-                                <rect key="frame" x="0.0" y="671" width="375" height="0.0"/>
+                                <rect key="frame" x="0.0" y="685" width="375" height="0.0"/>
                                 <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                 <constraints>
                                     <constraint firstAttribute="height" priority="100" id="3tp-P2-I24"/>
                                 </constraints>
                             </view>
                             <toolbar hidden="YES" opaque="NO" clearsContextBeforeDrawing="NO" contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="U7w-yv-4mp">
-                                <rect key="frame" x="0.0" y="671" width="375" height="44"/>
+                                <rect key="frame" x="0.0" y="685" width="375" height="44"/>
                                 <constraints>
                                     <constraint firstAttribute="height" constant="44" id="jsG-72-JAt"/>
                                 </constraints>
                                 <items/>
                             </toolbar>
                             <tabBar hidden="YES" opaque="NO" clearsContextBeforeDrawing="NO" contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="d6i-vM-zFn">
-                                <rect key="frame" x="0.0" y="715" width="375" height="63"/>
+                                <rect key="frame" x="0.0" y="729" width="375" height="49"/>
                                 <color key="backgroundColor" red="0.0" green="0.0" blue="0.0" alpha="0.0" colorSpace="custom" customColorSpace="sRGB"/>
                                 <constraints>
-                                    <constraint firstAttribute="height" constant="63" id="kt9-cF-e77"/>
+                                    <constraint firstAttribute="height" constant="49" id="kt9-cF-e77"/>
                                 </constraints>
                                 <items/>
                                 <connections>
@@ -125,12 +121,10 @@
                             <constraint firstItem="GBp-Vo-WtS" firstAttribute="top" secondItem="v69-wv-2wg" secondAttribute="top" id="NbD-9P-xqX"/>
                             <constraint firstItem="v69-wv-2wg" firstAttribute="right" secondItem="GBp-Vo-WtS" secondAttribute="right" id="SkF-oL-iej"/>
                             <constraint firstItem="d6i-vM-zFn" firstAttribute="trailing" secondItem="kh9-bI-dsS" secondAttribute="trailing" priority="100" id="UCK-34-wn8"/>
-                            <constraint firstItem="v69-wv-2wg" firstAttribute="centerX" secondItem="vcS-3e-fYP" secondAttribute="centerX" id="VrM-Hx-sWZ"/>
                             <constraint firstItem="d6i-vM-zFn" firstAttribute="leading" secondItem="kh9-bI-dsS" secondAttribute="leading" priority="100" id="W8O-BX-SCJ"/>
                             <constraint firstItem="v69-wv-2wg" firstAttribute="trailing" secondItem="d6i-vM-zFn" secondAttribute="trailing" id="XII-eu-6QS"/>
                             <constraint firstItem="GBp-Vo-WtS" firstAttribute="leading" secondItem="kh9-bI-dsS" secondAttribute="leading" priority="100" id="Xie-qJ-KQM"/>
                             <constraint firstItem="GBp-Vo-WtS" firstAttribute="left" secondItem="v69-wv-2wg" secondAttribute="left" id="Zc9-Bq-KNj"/>
-                            <constraint firstAttribute="centerY" secondItem="vcS-3e-fYP" secondAttribute="centerY" id="f2R-cs-BzY"/>
                             <constraint firstItem="U7w-yv-4mp" firstAttribute="top" relation="greaterThanOrEqual" secondItem="GBp-Vo-WtS" secondAttribute="bottom" id="hdN-1h-CmV"/>
                             <constraint firstItem="GBp-Vo-WtS" firstAttribute="trailing" secondItem="kh9-bI-dsS" secondAttribute="trailing" priority="100" id="jac-eP-PoV"/>
                             <constraint firstItem="v69-wv-2wg" firstAttribute="bottom" secondItem="d6i-vM-zFn" secondAttribute="bottom" id="kRQ-0d-WHK"/>
@@ -161,7 +155,6 @@
                     </toolbarItems>
                     <navigationItem key="navigationItem" id="3CK-Lb-JmW"/>
                     <connections>
-                        <outlet property="activityIndicator" destination="vcS-3e-fYP" id="auE-gF-hzy"/>
                         <outlet property="backButton" destination="0CQ-TP-1mv" id="7sm-nK-79X"/>
                         <outlet property="forwardButton" destination="k9E-fy-iJ1" id="Sqc-EU-jlZ"/>
                         <outlet property="nav" destination="3CK-Lb-JmW" id="Fo1-9P-tsj"/>
@@ -192,7 +185,7 @@
         <image name="leftImage" width="36" height="36"/>
         <image name="rightImage" width="36" height="36"/>
         <namedColor name="tintColor">
-            <color red="0.11800000071525574" green="0.28600001335144043" blue="0.4309999942779541" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+            <color red="0.054901960784313725" green="0.050980392156862744" blue="0.031372549019607843" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
         </namedColor>
     </resources>
 </document>

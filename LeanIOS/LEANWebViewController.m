@@ -30,11 +30,15 @@
 #import "LEANToolbarManager.h"
 #import "LEANWebViewPool.h"
 #import "LEANDocumentSharer.h"
+#import "LEANLoadingSpinnerManager.h"
 #import "Reachability.h"
 #import "LEANActionManager.h"
+#import "LEANPDFManager.h"
 #import "GNRegistrationManager.h"
 #import "LEANRegexRulesManager.h"
+#import "MedianEventsManager.h"
 #import "LEANWebViewIntercept.h"
+#import "LEANWindowsManager.h"
 #import "GNFileWriterSharer.h"
 #import "GNConfigPreferences.h"
 #import "GNBackgroundAudio.h"
@@ -55,7 +59,6 @@
 @property IBOutlet UIBarButtonItem* forwardButton;
 @property IBOutlet UINavigationItem* nav;
 @property IBOutlet UIBarButtonItem* navButton;
-@property IBOutlet UIActivityIndicatorView *activityIndicator;
 @property IBOutlet UITabBar *tabBar;
 @property IBOutlet UIToolbar *toolbar;
 @property IBOutlet NSLayoutConstraint *tabBarBottomConstraint;
@@ -105,6 +108,7 @@
 
 @property BOOL visitedLoginOrSignup;
 
+@property MedianEventsManager *eventsManager;
 @property LEANActionManager *actionManager;
 @property LEANToolbarManager *toolbarManager;
 @property LEANRegexRulesManager *regexRulesManager;
@@ -118,6 +122,9 @@
 @property GNRegistrationManager *registrationManager;
 @property GNLogManager *logManager;
 @property GNCustomHeaders *customHeadersManager;
+@property LEANWindowsManager *windowsManager;
+@property LEANPDFManager *pdfManager;
+@property LEANLoadingSpinnerManager *loadingSpinnerManager;
 
 @property NSNumber* statusBarStyle; // set via native bridge, only works if no navigation bar
 @property IBOutlet NSLayoutConstraint *topGuideConstraint; // modify constant to place content under status bar
@@ -125,8 +132,6 @@
 @property IBOutlet UIView *pluginView;
 @property GNJSBridgeInterface *JSBridgeInterface;
 @property NSString *JSBridgeScript;
-
-@property NSUInteger prevBackHistoryCount;
 
 @end
 
@@ -181,7 +186,7 @@ static NSInteger _currentWindows = 0;
     self.customHeadersManager = [[GNCustomHeaders alloc] init];
     
     // Launch screen overlay
-    [[LEANLaunchScreenManager sharedManager] show];
+    [[LEANLaunchScreenManager sharedManager] showWithParentViewController:self];
     
     // set title to application title
     if ([appConfig.navTitles count] == 0) {
@@ -205,7 +210,9 @@ static NSInteger _currentWindows = 0;
         self.initialWebview = nil;
         
         // nav title image
-        [self checkNavigationTitleImageForUrl:self.wkWebview.URL];
+        if (self.wkWebview.URL) {
+            [self checkNavigationTitleImageForUrl:self.wkWebview.URL];
+        }
         
     } else {
         if (appConfig.userAgentReady) {
@@ -231,7 +238,7 @@ static NSInteger _currentWindows = 0;
     [self updateStatusBarBackgroundColor:[UIColor colorNamed:@"statusBarBackgroundColor"] enableBlurEffect:appConfig.iosEnableBlurInStatusBar];
     
     self.sidebarItemsEnabled = appConfig.showNavigationMenu && [self isRootWebView];
-    [self showNavigationItemButtonsAnimated:NO];
+    [self updateNavigationBarItemsAnimated:NO];
     [self buildDefaultToobar];
     self.keyboardVisible = NO;
     self.keyboardRect = CGRectZero;
@@ -251,9 +258,11 @@ static NSInteger _currentWindows = 0;
     // to help fix status bar issues when rotating in full-screen video
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(orientationChanged) name:UIDeviceOrientationDidChangeNotification object:nil];
     
+    self.eventsManager = [[MedianEventsManager alloc] initWithWebViewController:self];
     self.actionManager = [[LEANActionManager alloc] initWithWebviewController:self];
     
     self.regexRulesManager = [[LEANRegexRulesManager alloc] initWithWvc:self];
+    self.windowsManager = [[LEANWindowsManager alloc] initWithWvc:self];
     
     self.locationManager = [[CLLocationManager alloc] init];
     self.locationManager.delegate = self;
@@ -266,6 +275,8 @@ static NSInteger _currentWindows = 0;
     self.documentSharer = [LEANDocumentSharer sharedSharer];
     self.keyboardManager = [LEANKeyboardManager shared];
     self.registrationManager = [GNRegistrationManager sharedManager];
+    self.pdfManager = [LEANPDFManager shared];
+    self.loadingSpinnerManager = [[LEANLoadingSpinnerManager alloc] initWithVc:self];
     
     // we will always be loading a page at launch, hide webview here to fix a white flash for dark themed apps
     [self hideWebview];
@@ -358,6 +369,7 @@ static NSInteger _currentWindows = 0;
             self.initialUrl = appConfig.initialURL;
         }
     }
+    
     [self loadUrl:self.initialUrl];
     
     // nav title image
@@ -497,18 +509,11 @@ static NSInteger _currentWindows = 0;
         [self addPullToRefresh];
     }
     
-    if ([self isRootWebView]) {
-        [self.navigationController setNavigationBarHidden:![GoNativeAppConfig sharedAppConfig].showNavigationBar animated:YES];
-    } else if (self.isWindowOpen && [GoNativeAppConfig sharedAppConfig].windowOpenHideNavbar){
-        [self.navigationController setNavigationBarHidden:YES animated:YES];
-    } else if ([GoNativeAppConfig sharedAppConfig].showNavigationBarWithNavigationLevels) {
-        [self.navigationController setNavigationBarHidden:NO animated:YES];
-    }
-    
     [self adjustInsets];
     
     NSURL *url = self.wkWebview.URL;
     if (url) {
+        [self checkNavigationTitleImageForUrl:url];
         [self checkNavigationForUrl:url];
     }
     
@@ -530,6 +535,7 @@ static NSInteger _currentWindows = 0;
 - (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection
 {
     [self.tabManager traitCollectionDidChange:previousTraitCollection];
+    [self.actionManager traitCollectionDidChange:previousTraitCollection];
 }
 
 - (void) buildDefaultToobar
@@ -602,19 +608,30 @@ static NSInteger _currentWindows = 0;
 {
     // check if navbar titles has regex match
     GoNativeAppConfig *appConfig = [GoNativeAppConfig sharedAppConfig];
-    BOOL showImageView = [appConfig shouldShowNavigationTitleImageForUrl:[url absoluteString]];
-    NSArray *entries = appConfig.navTitles;
     NSString *title;
+    BOOL showImageView = NO;
     
-    if (!showImageView && entries) {
-        NSString *urlString = [url absoluteString];
-        for (NSDictionary *entry in entries) {
-            NSPredicate *predicate = entry[@"predicate"];
-            if ([predicate evaluateWithObject:urlString]) {
-                showImageView = [entry[@"showImage"] boolValue];
-                title = entry[@"title"] ?: appConfig.appName;
-                break;
+    // Handle windowOpenHideNavbar
+    if (!self.isWindowOpen || !appConfig.windowOpenHideNavbar) {
+        BOOL hasRegexMatch = NO;
+        
+        // Check regex match
+        if ([appConfig.navTitles isKindOfClass:[NSArray class]]) {
+            for (NSDictionary *entry in appConfig.navTitles) {
+                NSPredicate *predicate = entry[@"predicate"];
+                if ([predicate evaluateWithObject:url.absoluteString]) {
+                    showImageView = [entry[@"showImage"] boolValue];
+                    title = entry[@"title"] ?: self.wkWebview.title;
+                    hasRegexMatch = YES;
+                    break;
+                }
             }
+        }
+        
+        // If no regex match and display mode is always
+        if (!hasRegexMatch && appConfig.showNavigationBar) {
+            showImageView = appConfig.isNavigationTitleImage;
+            title = appConfig.appName;
         }
     }
     
@@ -649,6 +666,8 @@ static NSInteger _currentWindows = 0;
         if (title) {
             self.navigationItem.title = title;
             [self.navigationController setNavigationBarHidden:NO animated:YES];
+        } else {
+            [self.navigationController setNavigationBarHidden:YES animated:YES];
         }
     }
 }
@@ -805,45 +824,18 @@ static NSInteger _currentWindows = 0;
     [self.documentSharer shareRequest:self.currentRequest fromButton:sender];
 }
 
-- (void) showNavigationItemButtonsAnimated:(BOOL)animated
-{
-    NSMutableArray *buttons = [NSMutableArray array];
-    NSMutableArray *leftButtons = [NSMutableArray array];
-    NSMutableArray *rightButtons = [NSMutableArray array];
-    
+- (void) updateNavigationBarItemsAnimated:(BOOL)animated {
     BOOL backButtonShown = self.urlLevel > 1 || self.isWindowOpen;
+    BOOL allowLeftAction = !backButtonShown && self.navButton == nil;
+    LEANActionButtons *actions = [self.actionManager configureNavBarButtonsAllowingLeftAction:allowLeftAction];
     
-    if (self.actionManager.items)
-        [buttons addObjectsFromArray:self.actionManager.items];
-    
-    if (self.sidebarItemsEnabled && self.navButton)
-        [buttons addObject:self.navButton];
-    
-    // put sidebar button to the left
-    if (buttons.count == 1 && self.sidebarItemsEnabled && self.navButton) {
-        [leftButtons addObject:self.navButton];
-    }
-    else if (buttons.count <= 3 && backButtonShown) {
-        [rightButtons addObjectsFromArray:buttons];
-    }
-    // split buttons between the left and right navigation items
-    else {
-        float halfIndex = (float)[buttons count] / 2;
-        for (NSInteger i = 0; i < [buttons count]; i++) {
-            if (i < halfIndex) {
-                [rightButtons addObject:buttons[i]];
-            } else {
-                [leftButtons insertObject:buttons[i] atIndex:0];
-            }
-        }
+    if (self.navButton) {
+        [self.navigationItem setLeftBarButtonItems:@[self.navButton] animated:animated];
+    } else {
+        [self.navigationItem setLeftBarButtonItems:actions.leftItems animated:animated];
     }
     
-    // do not override the back button
-    if (!backButtonShown) {
-        [self.navigationItem setLeftBarButtonItems:leftButtons animated:animated];
-    }
-    
-    [self.navigationItem setRightBarButtonItems:rightButtons animated:animated];
+    [self.navigationItem setRightBarButtonItems:actions.rightItems animated:animated];
     [self.navigationItem setHidesBackButton:NO animated:animated];
 }
 
@@ -973,6 +965,22 @@ static NSInteger _currentWindows = 0;
 {
     if (self.wkWebview) {
         [self.wkWebview reload];
+    }
+}
+
+- (void)triggerEvent:(NSString *)eventName data:(NSDictionary *)data {
+    [self.eventsManager triggerEvent:eventName data:data];
+}
+
+- (void)handleJsNavigationUrl:(NSString *)url {
+    if (!url || url.length == 0) {
+        return;
+    } else if ([url hasPrefix:@"javascript:"]) {
+        [self runJavascript:[url substringFromIndex: [@"javascript:" length]]];
+    } else if ([self.eventsManager isSubscribedForEvent:@"_median_url_changed"]) {
+        [self.eventsManager triggerEvent:@"_median_url_changed" data:@{ @"url": url }];
+    } else {
+        [self loadUrlAfterFilter:[LEANUtilities urlWithString:url]];
     }
 }
 
@@ -1183,7 +1191,7 @@ static NSInteger _currentWindows = 0;
     [self loadUrl:url];
     
     self.navigationItem.titleView = self.defaultTitleView;
-    [self showNavigationItemButtonsAnimated:YES];
+    [self updateNavigationBarItemsAnimated:YES];
 }
 
 - (void) searchBarCancelButtonClicked:(UISearchBar *)searchBar
@@ -1194,7 +1202,7 @@ static NSInteger _currentWindows = 0;
 - (void) searchCanceled
 {
     self.navigationItem.titleView = self.defaultTitleView;
-    [self showNavigationItemButtonsAnimated:YES];
+    [self updateNavigationBarItemsAnimated:YES];
 }
 
 
@@ -1210,7 +1218,7 @@ static NSInteger _currentWindows = 0;
     }
     
     BOOL isUserAction = navigationAction.navigationType == WKNavigationTypeLinkActivated || navigationAction.navigationType == WKNavigationTypeFormSubmitted;
-    BOOL shouldLoad = [self shouldLoadRequest:navigationAction.request isMainFrame:navigationAction.targetFrame.isMainFrame isUserAction:isUserAction hideWebview:YES sender:nil];
+    BOOL shouldLoad = [self shouldLoadRequest:navigationAction.request isMainFrame:navigationAction.targetFrame.isMainFrame isUserAction:isUserAction hideWebview:YES windowOpen:NO];
     if (!shouldLoad) {
         decisionHandler(WKNavigationActionPolicyCancel, preferences);
         return;
@@ -1227,15 +1235,18 @@ static NSInteger _currentWindows = 0;
         return;
     }
     
+    BOOL openShareDialog = [navigationAction.request.URL.scheme isEqualToString:@"data"];
     if (@available(iOS 15.0, *)) {
-        BOOL shouldDownloadUrl = [((LEANAppDelegate *)UIApplication.sharedApplication.delegate).bridge webView:webView shouldDownloadUrl:navigationAction.request.URL];
-        
-        if (navigationAction.shouldPerformDownload && shouldDownloadUrl) {
-            [self.documentSharer shareUrl:navigationAction.request.URL fromView:self.wkWebview];
-            [self showWebviewWithDelay:0.3]; // Stop loading animation
-            decisionHandler(WKNavigationActionPolicyCancel, preferences);
-            return;
+        if (navigationAction.shouldPerformDownload) {
+            openShareDialog = [((LEANAppDelegate *)UIApplication.sharedApplication.delegate).bridge webView:webView shouldDownloadUrl:navigationAction.request.URL];
         }
+    }
+    
+    if (openShareDialog) {
+        [self.documentSharer shareUrl:navigationAction.request.URL fromView:self.wkWebview];
+        [self showWebviewWithDelay:0.3]; // Stop loading animation
+        decisionHandler(WKNavigationActionPolicyCancel, preferences);
+        return;
     }
     
     decisionHandler(WKNavigationActionPolicyAllow, preferences);
@@ -1257,6 +1268,12 @@ static NSInteger _currentWindows = 0;
             decisionHandler(WKNavigationResponsePolicyCancel);
             return;
         }
+    }
+    
+    if ([self.pdfManager shouldHandleResponse:navigationResponse.response]) {
+        [self.pdfManager openPDF:navigationResponse.response.URL wvc:self];
+        decisionHandler(WKNavigationResponsePolicyCancel);
+        return;
     }
     
     if (navigationResponse.canShowMIMEType) {
@@ -1374,31 +1391,11 @@ static NSInteger _currentWindows = 0;
     [wkWebview.configuration.userContentController addScriptMessageHandler:self.JSBridgeInterface name:GNJSBridgeName];
 }
 
-- (void)openWindowWithUrl:(NSString *)urlString {
-    NSURL *urlToOpen = [NSURL URLWithString:urlString];
-    if (!urlToOpen) {
-        return;
-    }
-    NSMutableURLRequest *requestToOpen = [NSMutableURLRequest requestWithURL:urlToOpen];
-    // need to set mainDocumentURL to properly handle external links in shouldLoadRequest:
-    requestToOpen.mainDocumentURL = urlToOpen;
-    if (!requestToOpen) {
-        return;
-    }
-    BOOL shouldLoad = [self shouldLoadRequest:requestToOpen isMainFrame:YES isUserAction:YES hideWebview:NO sender:nil];
-    if (!shouldLoad) {
-        return;
-    }
-    LEANWebViewController *newvc = [self.storyboard instantiateViewControllerWithIdentifier:@"webviewController"];
-    newvc.initialUrl = urlToOpen;
-    NSMutableArray *controllers = [self.navigationController.viewControllers mutableCopy];
-    while (![[controllers lastObject] isKindOfClass:[LEANWebViewController class]]) {
-        [controllers removeLastObject];
-    }
-    [controllers addObject:newvc];
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [self.navigationController setViewControllers:controllers animated:YES];
-    });
+-(void)webView:(WKWebView *)webView contextMenuConfigurationForElement:(WKContextMenuElementInfo *)elementInfo completionHandler:(void (^)(UIContextMenuConfiguration * _Nullable))completionHandler {
+    UIContextMenuConfiguration *config = [ContextMenuHandler createConfigurationWithUrl:elementInfo.linkURL shareAction:^{
+        [self.documentSharer shareUrl:elementInfo.linkURL fromView:webView];
+    }];
+    completionHandler(config);
 }
 
 - (void) handleJSBridgeFunctions:(id)data{
@@ -1430,7 +1427,7 @@ static NSInteger _currentWindows = 0;
 }
 
 // currently, sender is used to receive a selected UIBarButtonItem from the action bar
-- (BOOL)shouldLoadRequest:(NSURLRequest*)request isMainFrame:(BOOL)isMainFrame isUserAction:(BOOL)isUserAction hideWebview:(BOOL)hideWebview sender:(id)sender
+- (BOOL)shouldLoadRequest:(NSURLRequest*)request isMainFrame:(BOOL)isMainFrame isUserAction:(BOOL)isUserAction hideWebview:(BOOL)hideWebview windowOpen:(BOOL)windowOpen
 {
     GoNativeAppConfig *appConfig = [GoNativeAppConfig sharedAppConfig];
     NSURL *url = [request URL];
@@ -1456,7 +1453,7 @@ static NSInteger _currentWindows = 0;
     }
     // Only start blob downloads on the main frame
     if ([url.scheme isEqualToString:@"blob"] && isMainFrame) {
-        [self.fileWriterSharer downloadBlobUrl:url filename:nil];
+        [self.fileWriterSharer downloadBlobUrl:url filename:nil callback:nil];
         return NO;
     }
     
@@ -1594,7 +1591,7 @@ static NSInteger _currentWindows = 0;
     if (appConfig.redirects != nil) {
         NSString *to = [appConfig.redirects valueForKey:urlString];
         if (!to) to = [appConfig.redirects valueForKey:@"*"];
-        if (to && ![to isEqualToString:urlString]) {
+        if (to && ![GNUtilities url:to matchesUrl:urlString]) {
             url = [NSURL URLWithString:to];
             dispatch_async(dispatch_get_main_queue(), ^{
                 [self loadUrl:url];
@@ -1653,7 +1650,7 @@ static NSInteger _currentWindows = 0;
     
     NSInteger newLevel = [LEANWebViewController urlLevelForUrl:url];
     if (self.urlLevel >= 0 && newLevel >= 0) {
-        if (newLevel > self.urlLevel) {
+        if (newLevel > self.urlLevel || windowOpen) {
             // push a new controller
             LEANWebViewController *newvc = [self.storyboard instantiateViewControllerWithIdentifier:@"webviewController"];
             newvc.initialUrl = url;
@@ -1725,7 +1722,7 @@ static NSInteger _currentWindows = 0;
     }
     
     if (newLevel >= 0) {
-        self.urlLevel = [LEANWebViewController urlLevelForUrl:url];
+        self.urlLevel = newLevel;
     }
     
     NSString *newTitle = [LEANWebViewController titleForUrl:url];
@@ -1840,6 +1837,7 @@ static NSInteger _currentWindows = 0;
         
         // add KVO for single-page app url changes
         [newView addObserver:self forKeyPath:@"URL" options:0 context:nil];
+        [newView addObserver:self forKeyPath:@"title" options:0 context:nil];
         [newView addObserver:self forKeyPath:@"canGoBack" options:0 context:nil];
         [newView addObserver:self forKeyPath:@"canGoForward" options:0 context:nil];
         
@@ -1907,7 +1905,14 @@ static NSInteger _currentWindows = 0;
             if (url) {
                 [self checkPreNavigationForUrl:url];
                 [self checkNavigationForUrl:url];
+                [self.actionManager didLoadUrl:url];
                 [self.registrationManager checkUrl:url];
+            }
+        }
+        if ([keyPath isEqualToString:@"title"]) {
+            // Update page title
+            if (self.wkWebview.title) {
+                [self checkNavigationTitleImageForUrl:url];
             }
         }
         if ([keyPath isEqualToString:@"canGoBack"]) {
@@ -1944,7 +1949,7 @@ static NSInteger _currentWindows = 0;
         // remove share button
         if (self.shareButton) {
             self.shareButton = nil;
-            [self showNavigationItemButtonsAnimated:YES];
+            [self updateNavigationBarItemsAnimated:YES];
         }
         
         // stop watching location
@@ -2046,8 +2051,6 @@ static NSInteger _currentWindows = 0;
         } else {
             self.shareButton = nil;
         }
-        
-        [self showNavigationItemButtonsAnimated:YES];
                 
         // registration service
         [self.registrationManager checkUrl:url];
@@ -2104,11 +2107,13 @@ static NSInteger _currentWindows = 0;
         
         // set initial css theme
         NSString *mode = [[NSUserDefaults standardUserDefaults] objectForKey:@"darkMode"];
-        [self setCssTheme:mode andPersistData:NO];
+        [self setCssTheme:mode ?: appConfig.iosDarkMode andPersistData:NO];
         
         // Accessibility & Dynamic Type Support
         UIContentSizeCategory contentSizeCategory = [UIApplication sharedApplication].preferredContentSizeCategory;
         [self applyCssForContentSizeCategory:contentSizeCategory];
+        
+        [LEANUtilities configureViewportOfWebView:self.wkWebview];
         
         [self runJavascriptWithCallback:@[@"median_library_ready", @"gonative_library_ready"] data:nil];
     });
@@ -2118,7 +2123,6 @@ static NSInteger _currentWindows = 0;
     if(!callback) return;
     
     LEANAppDelegate *appDelegate = (LEANAppDelegate*)[UIApplication sharedApplication].delegate;
-    appDelegate.isFirstLaunch = NO;
     
     NSMutableDictionary *additionalData = [NSMutableDictionary dictionary];
     if(appDelegate.apnsToken)
@@ -2170,14 +2174,11 @@ static NSInteger _currentWindows = 0;
     }
 }
 
-- (WKWebView*)webView:(WKWebView *)webView createWebViewWithConfiguration:(WKWebViewConfiguration *)configuration forNavigationAction:(WKNavigationAction *)navigationAction windowFeatures:(WKWindowFeatures *)windowFeatures
-{
-    // createWebView is called before shouldLoadRequest is called. To avoid creating an extra
-    // WebViewController for an external link, we check shouldLoadRequest here.
-    if (navigationAction.request) {
-        BOOL shouldLoad = [self shouldLoadRequest:navigationAction.request isMainFrame:YES isUserAction:YES hideWebview:NO sender:nil];
+- (BOOL)handleNewWindowRequest:(NSURLRequest *)request initialWebview:(WKWebView *)initialWebview {
+    if (request) {
+        BOOL shouldLoad = [self shouldLoadRequest:request isMainFrame:YES isUserAction:YES hideWebview:NO windowOpen:YES];
         if (!shouldLoad) {
-            return nil;
+            return NO;
         }
     }
     
@@ -2185,28 +2186,31 @@ static NSInteger _currentWindows = 0;
     
     if (!appConfig.enableWindowOpen) {
         dispatch_async(dispatch_get_main_queue(), ^{
-            [self loadRequest:navigationAction.request];
+            [self loadRequest:request];
         });
-        return nil;
+        return NO;
     }
     
-    if (appConfig.maxWindowsAutoClose && _currentWindows == appConfig.maxWindows && [appConfig.initialURL matchesIgnoreAnchor:navigationAction.request.URL]) {
+    if (appConfig.maxWindowsAutoClose && _currentWindows == appConfig.maxWindows && [appConfig.initialURL matchesIgnoreAnchor:request.URL]) {
         dispatch_async(dispatch_get_main_queue(), ^{
             LEANWebViewController *vc = self.navigationController.viewControllers.firstObject;
-            [self loadRequest:navigationAction.request];
+            [self loadRequest:request];
             [vc switchToWebView:self.wkWebview showImmediately:YES];
             [self.navigationController popToRootViewControllerAnimated:NO];
             
         });
-        return nil;
+        return NO;
     }
     
-    WKWebView *newWebview = [[NSClassFromString(@"WKWebView") alloc] initWithFrame:self.wkWebview.frame configuration:configuration];
-    [LEANUtilities configureWebView:newWebview];
-    
     LEANWebViewController *newvc = [self.storyboard instantiateViewControllerWithIdentifier:@"webviewController"];
-    newvc.initialWebview = newWebview;
+    newvc.initialUrl = request.URL;
     newvc.isWindowOpen = YES;
+    newvc.urlLevel = self.urlLevel;
+    
+    if (initialWebview) {
+        [LEANUtilities configureWebView:initialWebview];
+        newvc.initialWebview = initialWebview;
+    }
     
     NSMutableArray *controllers = [self.navigationController.viewControllers mutableCopy];
     while (![[controllers lastObject] isKindOfClass:[LEANWebViewController class]]) {
@@ -2216,8 +2220,17 @@ static NSInteger _currentWindows = 0;
     dispatch_async(dispatch_get_main_queue(), ^{
         [self.navigationController setViewControllers:controllers animated:YES];
     });
+    
+    return YES;
+}
 
-    return newWebview;
+- (WKWebView*)webView:(WKWebView *)webView createWebViewWithConfiguration:(WKWebViewConfiguration *)configuration forNavigationAction:(WKNavigationAction *)navigationAction windowFeatures:(WKWindowFeatures *)windowFeatures {
+    WKWebView *newWebview = [[NSClassFromString(@"WKWebView") alloc] initWithFrame:self.wkWebview.frame configuration:configuration];
+    BOOL handled = [self handleNewWindowRequest:navigationAction.request initialWebview:newWebview];
+    if (handled) {
+        return newWebview;
+    }
+    return nil;
 }
 
 -(void)webViewDidClose:(WKWebView *)webView
@@ -2349,9 +2362,7 @@ static NSInteger _currentWindows = 0;
     self.wkWebview.alpha = self.hideWebviewAlpha;
     self.wkWebview.userInteractionEnabled = NO;
     
-    self.activityIndicator.color = [UIColor colorNamed:@"activityIndicatorColor"];
-    self.activityIndicator.alpha = 1.0;
-    [self.activityIndicator startAnimating];
+    [self.loadingSpinnerManager startAnimationWithWvc:self];
     
     // Show webview after 10 seconds just in case we never get a page finished callback
     // Otherwise, users may be stuck forever on the loading animation
@@ -2368,11 +2379,11 @@ static NSInteger _currentWindows = 0;
     self.timer = nil;
     self.wkWebview.userInteractionEnabled = YES;
     
+    [self.loadingSpinnerManager stopAnimation];
+    
     [UIView animateWithDuration:0.3 delay:0 options:UIViewAnimationOptionAllowUserInteraction animations:^(void){
         self.wkWebview.alpha = 1.0;
-        self.activityIndicator.alpha = 0.0;
     } completion:^(BOOL finished){
-        [self.activityIndicator stopAnimating];
         [[LEANLaunchScreenManager sharedManager] hideAfterDelay:0.3];
     }];
 }
@@ -2418,14 +2429,9 @@ static NSInteger _currentWindows = 0;
 }
 
 - (void) showSidebarNavButton {
-    UIButton *favButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    [favButton setImage:[UIImage imageNamed:@"navImage"] forState:UIControlStateNormal];
-    [favButton addTarget:self action:@selector(showMenu)
-        forControlEvents:UIControlEventTouchUpInside];
-    [favButton setFrame:CGRectMake(0, 0, 36, 30)];
-    favButton.tintColor = [UIColor colorNamed:@"titleColor"];
-    self.navButton = [[UIBarButtonItem alloc] initWithCustomView:favButton];
-    self.navButton.accessibilityLabel = NSLocalizedString(@"button-menu", @"Button: Menu");
+    NSString *icon = [GoNativeAppConfig sharedAppConfig].sidebarMenuIcon ?: @"fas fa-bars";
+    NSString *label = NSLocalizedString(@"button-menu", @"Button: Menu");
+    self.navButton = [self.actionManager createNavBarButtonWithLabel:label icon:icon target:self action:@selector(showMenu)];
 }
 
 - (void) setNavigationButtonStatus
@@ -2721,17 +2727,14 @@ static NSInteger _currentWindows = 0;
         
         if ([mode isEqualToString:@"dark"]) {
             [UIApplication sharedApplication].delegate.window.overrideUserInterfaceStyle = UIUserInterfaceStyleDark;
-            self.statusBarStyle = [NSNumber numberWithInteger:UIStatusBarStyleDarkContent];
         }
         else if ([mode isEqualToString:@"light"]) {
             [UIApplication sharedApplication].delegate.window.overrideUserInterfaceStyle = UIUserInterfaceStyleLight;
-            self.statusBarStyle = [NSNumber numberWithInteger:UIStatusBarStyleLightContent];
         } else {
             [UIApplication sharedApplication].delegate.window.overrideUserInterfaceStyle = UIUserInterfaceStyleUnspecified;
-            self.statusBarStyle = [NSNumber numberWithInteger:UIStatusBarStyleDefault];
         }
         
-        [self setNeedsStatusBarAppearanceUpdate];
+        [self updateStatusBarStyle:mode];
     }
 }
 
@@ -2744,8 +2747,7 @@ static NSInteger _currentWindows = 0;
         mode = @"dark";
     }
 
-    [self setCssThemeAttribute:@"data-mode" withValue:mode];
-    [self setCssThemeAttribute:@"data-theme" withValue:mode];
+    [self setCssThemeAttribute:@"data-color-scheme-option" withValue:mode];
     
     if (persist) {
         [[NSUserDefaults standardUserDefaults] setValue:mode forKey:@"darkMode"];

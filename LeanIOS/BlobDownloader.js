@@ -1,12 +1,15 @@
-function medianDownloadBlobUrl(url) {
+function medianDownloadBlobUrl(url, id, filename) {
 	var req = new XMLHttpRequest();
 	req.open('GET', url, true);
 	req.responseType = 'blob';
 
 	req.onload = function(event) {
 		var blob = req.response;
-		saveBlob(blob);
+		saveBlob(blob, id, filename);
 	};
+    req.onerror = function(event) {
+        sendError(event);
+    };
 	req.send();
 
 	function sendMessage(message) {
@@ -19,11 +22,9 @@ function medianDownloadBlobUrl(url) {
 	    }
 	}
 
-	function saveBlob(blob, filename) {
+	function saveBlob(blob, id, filename) {
 	    var chunkSize = 1024 * 1024; // 1mb
 	    var index = 0;
-	    // random string to identify this file transfer
-	    var id = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 
 	    function sendHeader() {
 	        sendMessage({
@@ -37,12 +38,15 @@ function medianDownloadBlobUrl(url) {
 
 	    function sendChunk() {
 	        if (index >= blob.size) {
-	            return sendEnd();
+                sendMessage({
+                    event: 'fileEnd',
+                    id: id
+                });
+	            return;
 	        }
 
 	        var chunkToSend = blob.slice(index, index + chunkSize);
 	        var reader = new FileReader();
-	        reader.readAsDataURL(chunkToSend);
 	        reader.onloadend = function() {
 	            sendMessage({
 	                event: 'fileChunk',
@@ -52,16 +56,21 @@ function medianDownloadBlobUrl(url) {
 	            index += chunkSize;
 	            setTimeout(sendChunk);
 	        };
-	    }
-	    
-	    function sendEnd() {
-	        sendMessage({
-	            event: 'fileEnd',
-	            id:id
-	        });
+            reader.onerror = function(event) {
+                sendError(event);
+            };
+            reader.readAsDataURL(chunkToSend);
 	    }
 	    
 	    sendHeader();
 	    sendChunk();
 	}
+    
+    function sendError(event) {
+        sendMessage({
+            event: 'fileEnd',
+            id: id,
+            error: event?.target?.error?.message || 'Unknown error occurred'
+        });
+    }
 }

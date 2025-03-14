@@ -7,9 +7,12 @@
 //
 
 #import "LEANLaunchScreenManager.h"
+#import "LEANAppDelegate.h"
 #import "GonativeIO-Swift.h"
+@import GoNativeCore;
 
 @interface LEANLaunchScreenManager()
+@property id<GNController> controller;
 @property UIImageView *launchScreen;
 @property BOOL isShown;
 @end
@@ -26,26 +29,55 @@
     }
 }
 
-- (void)show {
-    if (!self.isShown) {
-        self.isShown = YES;
-        
-        self.launchScreen = [[UIImageView alloc] initWithFrame:UIScreen.mainScreen.bounds];
-        self.launchScreen.image = [UIImage imageNamed:@"LaunchBackground"];
-        self.launchScreen.clipsToBounds = YES;
-        
-        UIImageView *centerImageView = [[UIImageView alloc] initWithFrame:CGRectMake(0, 0, 200, 400)];
-        centerImageView.image = [UIImage imageNamed:@"LaunchCenter"];
-        centerImageView.contentMode = UIViewContentModeScaleAspectFit;
-        centerImageView.center = CGPointMake(self.launchScreen.bounds.size.width / 2, self.launchScreen.bounds.size.height / 2);
-        [self.launchScreen addSubview:centerImageView];
-        
-        UIWindow *currentWindow = [UIApplication sharedApplication].currentKeyWindow;
-        [currentWindow addSubview:self.launchScreen];
+- (void)showWithParentViewController:(UIViewController *)vc {
+    if (self.isShown) {
+        return;
     }
+    
+    self.isShown = YES;
+    
+    self.controller = [((LEANAppDelegate *)[UIApplication sharedApplication].delegate).bridge getControllerForKey:@"splashScreen" runner:(id)vc];
+    
+    if (self.controller) {
+        [self.controller triggerEvent:@"showSplashScreen"];
+        return;
+    }
+    
+    self.launchScreen = [[UIImageView alloc] init];
+    self.launchScreen.image = [UIImage imageNamed:@"LaunchBackground"];
+    self.launchScreen.clipsToBounds = YES;
+    self.launchScreen.translatesAutoresizingMaskIntoConstraints = NO;
+    
+    UIImageView *centerImageView = [[UIImageView alloc] init];
+    centerImageView.image = [UIImage imageNamed:@"LaunchCenter"];
+    centerImageView.contentMode = UIViewContentModeScaleAspectFit;
+    centerImageView.translatesAutoresizingMaskIntoConstraints = NO;
+    
+    [self.launchScreen addSubview:centerImageView];
+    UIWindow *currentWindow = [UIApplication sharedApplication].currentKeyWindow;
+    [currentWindow addSubview:self.launchScreen];
+    
+    [NSLayoutConstraint activateConstraints:@[
+        [self.launchScreen.topAnchor constraintEqualToAnchor:currentWindow.topAnchor],
+        [self.launchScreen.bottomAnchor constraintEqualToAnchor:currentWindow.bottomAnchor],
+        [self.launchScreen.leadingAnchor constraintEqualToAnchor:currentWindow.leadingAnchor],
+        [self.launchScreen.trailingAnchor constraintEqualToAnchor:currentWindow.trailingAnchor]
+    ]];
+    
+    [NSLayoutConstraint activateConstraints:@[
+        [centerImageView.widthAnchor constraintEqualToConstant:200],
+        [centerImageView.heightAnchor constraintEqualToConstant:400],
+        [centerImageView.centerXAnchor constraintEqualToAnchor:self.launchScreen.centerXAnchor],
+        [centerImageView.centerYAnchor constraintEqualToAnchor:self.launchScreen.centerYAnchor]
+    ]];
 }
 
 - (void)hide {
+    if (self.controller) {
+        [self.controller triggerEvent:@"hideSplashScreen"];
+        return;
+    }
+    
     if (self.launchScreen) {
         [self.launchScreen removeFromSuperview];
         self.launchScreen = nil;

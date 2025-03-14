@@ -12,7 +12,11 @@ function addCommandCallback(command, params, persistCallback) {
         return new Promise(function(resolve, reject) {
             // declare a temporary function
             window[tempFunctionName] = function(data) {
-                resolve(data);
+                if (typeof data?.error === 'string') {
+                    reject(data.error);
+                } else {
+                    resolve(data);
+                }
                 delete window[tempFunctionName];
             }
             // execute command
@@ -105,17 +109,23 @@ median.share = {
     sharePage: function (params){
         addCommand("median://share/sharePage", params);
     },
-    downloadFile: function (params){
-        addCommand("median://share/downloadFile", params);
+    downloadFile: function (params) {
+        return addCommandCallback("median://share/downloadFile", params);
     },
     downloadImage: function (params){
-        addCommand("median://share/downloadImage", params);
+        return addCommandCallback("median://share/downloadImage", params);
     }
 };
 
 median.open = {
     appSettings: function (){
         addCommand("median://open/app-settings");
+    }
+};
+
+median.permissions = {
+    status: function (permissions) {
+        return addCommandCallback("median://permissions/status", { permissions });
     }
 };
 
@@ -132,8 +142,8 @@ median.webview = {
 };
 
 median.keyboard = {
-    info: function () {
-        return addCommandCallback("median://keyboard/info");
+    info: function (params) {
+        return addCommandCallback("median://keyboard/info", params);
     },
     listen: function (callback) {
         addCommand("median://keyboard/listen", { callback });
@@ -152,6 +162,15 @@ median.webconsolelogs = {
 median.config = {
     set: function(params){
         addCommand("median://config/set", params);
+    }
+};
+
+median.contextMenu = {
+    setEnabled: function(enabled){
+        addCommand("median://contextMenu/setEnabled", { enabled });
+    },
+    setLinkActions: function(actions){
+        addCommand("median://contextMenu/setLinkActions", { actions });
     }
 };
 
@@ -204,9 +223,17 @@ median.screen = {
         }
         addCommand("median://screen/setBrightness", params);
     },
+    setColorScheme: function(mode) {
+        addCommand("median://screen/setColorScheme", { mode });
+    },
+    resetColorScheme: function() {
+        addCommand("median://screen/resetColorScheme");
+    },
     setMode: function(params) {
-        if (params.mode) {
-            addCommand("median://screen/setMode", params);
+        if (params && params.mode === "default") {
+            addCommand("median://screen/resetColorScheme");
+        } else {
+            addCommand("median://screen/setColorScheme", params);
         }
     },
     keepScreenOn: function(params){
@@ -270,8 +297,8 @@ median.clipboard = {
 };
 
 median.window = {
-    open: function (urlString){
-        var params = {url: urlString};
+    open: function (urlString, mode) {
+        var params = { url: urlString, mode };
         addCommand("median://window/open", params);
     },
     close: function () {
@@ -332,40 +359,6 @@ median.ios.contextualNavToolbar = {
     }
 };
 
-
-///////////////////////////////
-////   Android Exclusive   ////
-///////////////////////////////
-
-median.android = {};
-
-median.android.geoLocation = {
-    promptAndroidLocationServices: function(){
-        addCommand("median://geoLocation/promptAndroidLocationServices");
-    }
-};
-
-median.android.screen = {
-    fullscreen: function(){
-        addCommand("median://screen/fullscreen");
-    },
-    normal: function(){
-        addCommand("median://screen/normal");
-    },
-    keepScreenOn: function(){
-        addCommand("median://screen/keepScreenOn");
-    },
-    keepScreenNormal: function(){
-        addCommand("median://screen/keepScreenNormal");
-    }
-};
-
-median.android.audio = {
-    requestFocus: function(enabled){
-        var params = {enabled: enabled};
-        addCommand("median://audio/requestFocus", params);
-    }
-};
 
 //////////////////////////////////////
 ////   Webpage Helper Functions   ////

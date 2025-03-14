@@ -1,12 +1,13 @@
-gonative-ios
+Median iOS
 ============
 
-This is the native IOS code used by https://gonative.io/
+This is the native iOS code used by https://median.co/
 
-It allows the creation of apps from existing mobile-optimized websites.
+It allows the creation of full-featured native apps from existing mobile-optimized websites.
 
 How to use
 ------------
-Open the workspace named GoNativeIOS.xcworkspace in Xcode. Edit appConfig.json as appropriate.
 
-Licensing information available at https://gonative.io/
+Build instructions at https://median.co/docs/build-ios-from-source
+
+Licensing information available at https://median.co/license

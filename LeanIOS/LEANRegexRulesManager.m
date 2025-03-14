@@ -7,11 +7,11 @@
 //
 
 #import "LEANRegexRulesManager.h"
-#import <SafariServices/SafariServices.h>
+#import "LEANWindowsManager.h"
 #import "GonativeIO-Swift.h"
 
-@interface LEANRegexRulesManager()<SFSafariViewControllerDelegate>
-@property (weak, nonatomic) LEANWebViewController *wvc;
+@interface LEANRegexRulesManager()
+@property LEANWindowsManager *windowsManager;
 @property NSArray<NSDictionary *> *regexRules;
 @end
 
@@ -21,7 +21,7 @@
 {
     self = [super init];
     if (self) {
-        self.wvc = wvc;
+        self.windowsManager = [[LEANWindowsManager alloc] initWithWvc:wvc];
         [self initializeValues];
     }
     return self;
@@ -45,72 +45,31 @@
     self.regexRules = regexRules;
 }
 
-- (NSDictionary *)matchesWithUrlString:(NSString *)urlString {
-    for (NSUInteger i = 0; i < self.regexRules.count; i++) {
-        NSPredicate *predicate = self.regexRules[i][@"predicate"];
-        NSString *mode = self.regexRules[i][@"mode"];
-        
-        if (![predicate isKindOfClass:[NSPredicate class]] || ![mode isKindOfClass:[NSString class]]) {
-            continue;
-        }
-        
-        @try {
-            if ([predicate evaluateWithObject:urlString]) {
-                return @{ @"matches": @YES, @"mode": mode };
-            }
-        }
-        @catch (NSException* exception) {
-            NSLog(@"Error in regex internal external: %@", exception);
-        }
-    }
-    return @{ @"matches": @NO };
-}
-
-- (void)openExternalUrl:(NSURL *)url mode:(NSString *)mode {
-    if ([mode isEqualToString:@"appbrowser"]) {
-        SFSafariViewController *vc = [[SFSafariViewController alloc] initWithURL:url];
-        vc.delegate = self;
-        [self.wvc presentViewController:vc animated:YES completion:nil];
-        return;
-    }
-    
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [[UIApplication sharedApplication] openURL:url options:@{} completionHandler:nil];
-    });
-}
-
 - (BOOL)shouldHandleRequest:(NSURLRequest *)request {
     NSURL *url = [request URL];
     NSString *urlString = [url absoluteString];
     NSString* hostname = [url host];
     
-    NSDictionary *matchResult = [self matchesWithUrlString:urlString];
+    NSDictionary *matchResult = [[GoNativeAppConfig sharedAppConfig] getRegexRuleForURL:urlString rules:self.regexRules];
     
     BOOL matchedRegex = [matchResult[@"matches"] boolValue];
     if (matchedRegex) {
         NSString *mode = matchResult[@"mode"];
         
         if ([mode isKindOfClass:[NSString class]] && ![mode isEqualToString:@"internal"]) {
-            [self openExternalUrl:request.URL mode:mode];
+            [self.windowsManager openUrl:request.URL mode:mode];
             return NO;
         }
     } else  {
         NSString *initialHost = [GoNativeAppConfig sharedAppConfig].initialHost;
         
         if (![hostname isEqualToString:initialHost] && ![hostname hasSuffix:[@"." stringByAppendingString:initialHost]]) {
-            [self openExternalUrl:request.URL mode:@"external"];
+            [self.windowsManager openUrl:request.URL mode:@"external"];
             return NO;
         }
     }
     
     return YES;
-}
-
-#pragma mark - SFSafariViewControllerDelegate
-- (void)safariViewControllerDidFinish:(SFSafariViewController *)controller {
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        [self.wvc runJavascriptWithCallback:@"median_appbrowser_closed" data:nil];
-    });
 }
 
 @end

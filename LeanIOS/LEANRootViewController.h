@@ -14,6 +14,7 @@
 @property LEANWebViewController *webViewController;
 
 // these are run on the top-most webview
+- (void)handleJsNavigationUrl:(NSString *)url;
 - (void)loadUrl:(NSURL*)url;
 - (void)loadUrlUsingJavascript:(NSURL *)url;
 - (void)runJavascript:(NSString*)js;

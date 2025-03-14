@@ -13,8 +13,8 @@
 - (instancetype)initWithTabBar:(UITabBar*)tabBar webviewController:(LEANWebViewController*)wvc;
 - (void)handleUrl:(NSURL *)url query:(NSDictionary*)query;
 - (void)didLoadUrl:(NSURL*)url;
-- (void)selectTabWithUrl:(NSString*)url javascript:(NSString*)javascript;
-- (void)autoSelectTabForUrl:(NSURL*)url;
+- (void)selectTabWithUrl:(NSString *)url;
+- (void)autoSelectTabForUrl:(NSURL *)url;
 - (void)selectTabNumber:(NSUInteger)number;
 - (void)deselectTabs;
 - (void)setTabsWithJson:(NSDictionary*)json;

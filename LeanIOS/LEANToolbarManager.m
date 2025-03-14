@@ -131,7 +131,11 @@
 
 - (void)backPressed:(id)sender
 {
-    [self.wvc goBack];
+    if ([self.wvc canGoBack]) {
+        [self.wvc goBack];
+    } else if (self.wvc.navigationController.viewControllers.count >= 2) {
+        [self.wvc.navigationController popViewControllerAnimated:YES];
+    }
 }
 
 - (void)forwardPressed:(id)sender
@@ -212,7 +216,7 @@
     // Update back button
     BOOL backEnabled = [self tryToShowBackButton:url];
     if (!backEnabled) {
-        backEnabled = [self checkToolbarItem:self.backButton forUrl:urlString enabled:[self.wvc canGoBack]];
+        backEnabled = [self checkToolbarItem:self.backButton forUrl:urlString enabled:[self canGoBack]];
     }
     
     // Check visibilityByBackButton
@@ -235,8 +239,12 @@
     }
 }
 
+- (BOOL)canGoBack {
+    return [self.wvc canGoBack] || self.wvc != self.wvc.navigationController.viewControllers.firstObject;
+}
+
 - (BOOL)tryToShowBackButton:(NSURL *)url {
-    if (![self.wvc canGoBack]) return NO;
+    if (![self canGoBack]) return NO;
     
     if ([self.urlMimeType isEqualToString:@"application/pdf"] || [self.urlMimeType hasPrefix:@"image/"]) {
         [self setToolbarItem:self.backButton enabled:YES];
@@ -288,14 +296,14 @@
 - (void)updateToolbarButtons {
     BOOL backEnabled = NO;
     if (self.backButton.enabled) {
-        [self setToolbarItem:self.backButton enabled:[self.wvc canGoBack]];
-        backEnabled = [self.wvc canGoBack];
+        backEnabled = [self canGoBack];
+        [self setToolbarItem:self.backButton enabled:backEnabled];
     }
     
     BOOL forwardEnabled = NO;
     if (self.forwardButton.enabled) {
-        [self setToolbarItem:self.forwardButton enabled:[self.wvc canGoForward]];
         forwardEnabled = [self.wvc canGoForward];
+        [self setToolbarItem:self.forwardButton enabled:forwardEnabled];
     }
     
     BOOL refreshEnabled = self.refreshButton.enabled;

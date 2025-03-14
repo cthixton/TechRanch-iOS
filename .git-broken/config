@@ -1,0 +1,12 @@
+[core]
+	repositoryformatversion = 0
+	filemode = true
+	bare = false
+	logallrefupdates = true
+	ignorecase = true
+	precomposeunicode = true
+[http]
+	postBuffer = 524288000
+[remote "TechRanch-iOS"]
+	url = https://github.com/cthixton/TechRanch-iOS.git
+	fetch = +refs/heads/*:refs/remotes/TechRanch-iOS/*

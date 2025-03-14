@@ -35,6 +35,7 @@ static NSString *kLEANWebViewControllerClearPools = @"co.median.ios.WebViewContr
 - (void) hideTabBarAnimated:(BOOL)animated;
 - (void) showToolbarAnimated:(BOOL)animated;
 - (void) hideToolbarAnimated:(BOOL)animated;
+- (void) updateNavigationBarItemsAnimated:(BOOL)animated;
 - (void) sharePage: (id)sender;
 - (void) sharePageWithUrl:(NSString*)url text:(NSString*)text sender:(id)sender;
 - (BOOL) canGoBack;
@@ -46,5 +47,8 @@ static NSString *kLEANWebViewControllerClearPools = @"co.median.ios.WebViewContr
 - (void) searchPressed:(id)sender;
 - (void) setSharePopOverRect:(CGRect)rect;
 - (void) handleJSBridgeFunctions:(id)data;
+- (void) handleJsNavigationUrl:(NSString *)url;
+- (BOOL) handleNewWindowRequest:(NSURLRequest *)request initialWebview:(WKWebView *)initialWebview;
 - (void) runJavascriptWithCallback:(id)callback data:(NSDictionary*)data;
+- (void) triggerEvent:(NSString *)eventName data:(NSDictionary *)data;
 @end

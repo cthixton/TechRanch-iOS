@@ -7,10 +7,12 @@
 //
 
 #import "GNFileWriterSharer.h"
+#import "LEANPDFManager.h"
 #import "LEANUtilities.h"
 
 @interface GNFileWriterSharerFileInfo : NSObject
 @property NSString *identifier;
+@property NSString *callback;
 @property NSString *fileName;
 @property NSUInteger size;
 @property NSString *type;
@@ -27,8 +29,6 @@
 @property NSMutableDictionary *idToFileInfo;
 @property UIDocumentInteractionController *documentInteractionController;
 @property GNFileWriterSharerFileInfo *interactingFile;
-@property NSString *defaultFileName;
-@property NSString *nextFileName;
 @end
 
 @implementation GNFileWriterSharer
@@ -67,8 +67,6 @@
         [self receivedFileChunk:message.body];
     } else if ([@"fileEnd" isEqualToString:event]) {
         [self receivedFileEnd:message.body];
-    } else if([@"nextFileInfo" isEqualToString:event]) {
-        [self receivedNextFileInfo:message.body];
     } else {
         NSLog(@"Message to %@ has invalid event %@", message.name, event);
     }
@@ -82,14 +80,9 @@
         return;
     }
     
-    NSString *fileName = self.defaultFileName ?: message[@"name"];
+    NSString *fileName = message[@"name"];
     if (![fileName isKindOfClass:[NSString class]] || fileName.length == 0) {
-        if (self.nextFileName) {
-            fileName = self.nextFileName;
-            self.nextFileName = nil;
-        } else {
-            fileName = @"download";
-        }
+        fileName = @"download";
     }
     
     NSNumber *fileSize = message[@"size"];
@@ -128,17 +121,16 @@
         return;
     }
     
-    GNFileWriterSharerFileInfo *info = [[GNFileWriterSharerFileInfo alloc] init];
-    info.identifier = identifier;
-    info.fileName = fileName;
-    info.size = size;
-    info.type = type;
-    info.containerDir = containerDir;
-    info.savedFileUrl = savedFileUrl;
-    info.fileHandle = fileHandle;
-    info.bytesWritten = 0;
-    
-    self.idToFileInfo[identifier] = info;
+    GNFileWriterSharerFileInfo *info = self.idToFileInfo[identifier];
+    if (info) {
+        info.fileName = fileName;
+        info.size = size;
+        info.type = type;
+        info.containerDir = containerDir;
+        info.savedFileUrl = savedFileUrl;
+        info.fileHandle = fileHandle;
+        info.bytesWritten = 0;
+    }
 }
 
 - (void)receivedFileChunk:(NSDictionary*)message
@@ -167,10 +159,12 @@
     NSData *chunk = [[NSData alloc] initWithBase64EncodedString:base64 options:0];
     
     if (fileInfo.bytesWritten + chunk.length > fileInfo.size) {
-        NSLog(@"Received too many bytes. Expected %ld", fileInfo.size);
         [fileInfo.fileHandle closeFile];
         [[NSFileManager defaultManager] removeItemAtURL:fileInfo.savedFileUrl error:nil];
         [self.idToFileInfo removeObjectForKey:identifier];
+        
+        NSString *error = [NSString stringWithFormat:@"Received too many bytes. Expected %ld", fileInfo.size];
+        [self completeDownload:identifier data:@{ @"success": @NO, @"error": error }];
         return;
     }
     
@@ -192,12 +186,24 @@
     }
     [fileInfo.fileHandle closeFile];
     
+    NSString *error = message[@"error"];
+    if ([error isKindOfClass:[NSString class]] && error.length > 0 && fileInfo.callback) {
+        [self completeDownload:identifier data:@{ @"success": @NO, @"error": error }];
+        return;
+    }
+    
     if (fileInfo.bytesWritten != fileInfo.size) {
-        NSLog(@"We only got %ld bytes, expected %ld", fileInfo.bytesWritten, fileInfo.size);
+        error = [NSString stringWithFormat:@"Received only %ld of %ld bytes", fileInfo.bytesWritten, fileInfo.size];
+        [self completeDownload:identifier data:@{ @"success": @NO, @"error": error }];
         return;
     }
     
     dispatch_async(dispatch_get_main_queue(), ^{
+        if ([[LEANPDFManager shared] shouldHandleType:fileInfo.type]) {
+            [[LEANPDFManager shared] openPDF:fileInfo.savedFileUrl wvc:self.wvc];
+            return;
+        }
+        
         UIDocumentInteractionController *document = [UIDocumentInteractionController interactionControllerWithURL:fileInfo.savedFileUrl];
         self.documentInteractionController = document;
         self.interactingFile = fileInfo;
@@ -206,26 +212,31 @@
         document.delegate = self;
         [document presentOptionsMenuFromRect:CGRectZero inView:self.webView animated:YES];
     });
-}
-
--(void)receivedNextFileInfo:(NSDictionary*)message
-{
-    NSString *name = message[@"name"];
-    if (![name isKindOfClass:[NSString class]] || name.length == 0) {
-        NSLog(@"Invalid name for nextFileInfo");
-        return;
-    }
     
-    self.nextFileName = name;
+    [self completeDownload:identifier data:@{ @"success": @YES }];
 }
 
--(void)downloadBlobUrl:(NSURL*)url filename:(NSString*)filename {
-    self.defaultFileName = filename;
+- (void)downloadBlobUrl:(NSURL *)url filename:(NSString * _Nullable)filename callback:(NSString * _Nullable)callback {
     NSURL *jsFile = [[NSBundle mainBundle] URLForResource:@"BlobDownloader" withExtension:@"js"];
     NSString *js = [NSString stringWithContentsOfURL:jsFile encoding:NSUTF8StringEncoding error:nil];
     [self.wvc runJavascript:js];
-    js = [NSString stringWithFormat:@"medianDownloadBlobUrl(%@)", [LEANUtilities jsWrapString:url.absoluteString]];
+    
+    NSString *identifier = [NSUUID UUID].UUIDString;
+    GNFileWriterSharerFileInfo *info = [[GNFileWriterSharerFileInfo alloc] init];
+    info.identifier = identifier;
+    info.callback = callback;
+    self.idToFileInfo[identifier] = info;
+    
+    js = [NSString stringWithFormat:@"medianDownloadBlobUrl(%@, '%@', '%@')", [LEANUtilities jsWrapString:url.absoluteString], identifier, filename ?: @""];
     [self.wvc runJavascript:js];
+}
+
+- (void)completeDownload:(NSString *)identifier data:(NSDictionary *)data {
+    GNFileWriterSharerFileInfo *fileInfo = self.idToFileInfo[identifier];
+    if (fileInfo) {
+        [self.wvc runJavascriptWithCallback:fileInfo.callback data:data];
+        [self.idToFileInfo removeObjectForKey:identifier];
+    }
 }
 
 #pragma mark UIDocumentInteractionControllerDelegate

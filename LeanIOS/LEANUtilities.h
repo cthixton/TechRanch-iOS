@@ -27,6 +27,7 @@
 +(NSString*)capitalizeWords:(NSString*)string;
 +(NSString*)getLaunchImageName;
 +(void)configureWebView:(UIView*)webview;
++ (void)configureViewportOfWebView:(WKWebView *)webview;
 + (WKProcessPool *)wkProcessPool;
 +(NSArray<NSPredicate*>*)createRegexArrayFromStrings:(id)input;
 +(BOOL)string:(NSString*)string matchesAnyRegex:(NSArray<NSPredicate*>*)regexes;
@@ -34,4 +35,5 @@
 +(NSString*)createJsForCallback:(NSString*)functionName data:(NSDictionary*)data;
 +(BOOL)checkNativeBridgeUrl:(NSString*)url;
 +(BOOL)cookie:(NSHTTPCookie*)cookie matchesUrl:(NSURL*)url;
++ (void)downloadUrl:(NSURL *)url filename:(NSString *)filename directory:(NSURL *)directory completion:(void (^)(NSURL *fileUrl))completion;
 @end

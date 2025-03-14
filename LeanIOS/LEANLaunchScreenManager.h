@@ -10,7 +10,7 @@
 
 @interface LEANLaunchScreenManager : NSObject
 + (LEANLaunchScreenManager *)sharedManager;
-- (void)show;
+- (void)showWithParentViewController:(UIViewController *)vc;
 - (void)hide;
 - (void)hideAfterDelay:(double)delay;
 @end

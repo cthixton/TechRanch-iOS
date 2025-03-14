@@ -19,7 +19,7 @@ static NSUInteger GNFileWriterSharerMaxSize = 1024 * 1024 * 1024; // 1 gigabyte
 @interface GNFileWriterSharer : NSObject <WKScriptMessageHandler>
 @property (weak) UIView *webView;
 @property (weak) LEANWebViewController *wvc;
-- (void)downloadBlobUrl:(NSURL *)url filename:(NSString *_Nullable)filename;
+- (void)downloadBlobUrl:(NSURL *)url filename:(NSString * _Nullable)filename callback:(NSString * _Nullable)callback;
 @end
 
 NS_ASSUME_NONNULL_END

@@ -24,9 +24,6 @@
 {
     // clear keychain item if this is first launch
     if (![[NSUserDefaults standardUserDefaults] objectForKey:@"hasLaunched"]) {
-        GoNativeKeychain *keyChain = [[GoNativeKeychain alloc] init];
-        [keyChain deleteSecret];
-        
         [[NSUserDefaults standardUserDefaults] setValue:@YES forKey:@"hasLaunched"];
         [[NSUserDefaults standardUserDefaults] synchronize];
         
@@ -98,7 +95,7 @@
         }
         
         dispatch_async(dispatch_get_main_queue(), ^{
-            [(LEANRootViewController*)rvc loadUrl:[components URL]];
+            [(LEANRootViewController *)rvc handleJsNavigationUrl:components.URL.absoluteString];
         });
         
         return YES;

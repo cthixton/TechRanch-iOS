@@ -22,11 +22,13 @@
     "iosUserAgentAdd": "median",
     "androidUserAgentAdd": "median",
     "androidSigningKey": "release",
-    "iosCustomHeaders": {},
-    "androidCustomHeaders": {},
     "injectMedianJS": true,
     "androidForceUserAgent": "",
     "iosForceUserAgent": "",
+    "keepScreenOn": null,
+    "iosCustomHeaders": {},
+    "androidCustomHeaders": {},
+    "forceSessionCookieExpiry": 0,
     "version": 2
   },
   "navigation": {
@@ -232,34 +234,13 @@
       "enabled": false,
       "numWindows": 5,
       "autoClose": false
-    }
+    },
+    "iosSettings": {},
+    "swipeGestures": null
   },
   "styling": {
-    "iosLaunchScreen": {
-      "backgroundColor": "#FFFFFF",
-      "backgroundColorDark": "#000000",
-      "backgroundImage": "https://s3.amazonaws.com/gonativeio/app_files/wqdmda/1707423770890_226k1m3p7neep_FFFFFF_1_2x2.png",
-      "backgroundImageDark": "https://s3.amazonaws.com/gonativeio/app_files/wqdmda/1707423770905_ga1qwkga7nj2u_000000_1_2x2.png",
-      "centerImageDark": "https://s3.amazonaws.com/gonativeio/app_files/wqdmda/app_icon_1707423770.png",
-      "centerImage": "https://s3.amazonaws.com/gonativeio/app_files/wqdmda/app_icon_1707423770.png"
-    },
-    "androidLaunchImages": {
-      "mdpi": "https://s3.amazonaws.com/gonativeio/app_files/wqdmda/1707423771151_g2h3pjhpjx72m_180x180.png",
-      "hdpi": "https://s3.amazonaws.com/gonativeio/app_files/wqdmda/1707423771165_mxjzyajwx47qe_270x270.png",
-      "xhdpi": "https://s3.amazonaws.com/gonativeio/app_files/wqdmda/1707423771182_e93r3t7d6251a_360x360.png",
-      "xxhdpi": "https://s3.amazonaws.com/gonativeio/app_files/wqdmda/1707423771203_vpj6crz8ht8u8_540x540.png",
-      "xxxhdpi": "https://s3.amazonaws.com/gonativeio/app_files/wqdmda/1707423771215_7g651mfcjwp64_720x720.png"
-    },
-    "androidLaunchImagesDark": {
-      "mdpi": "https://s3.amazonaws.com/gonativeio/app_files/wqdmda/1707423771250_ghp9qxh0nq54y_180x180.png",
-      "hdpi": "https://s3.amazonaws.com/gonativeio/app_files/wqdmda/1707423771294_8kacbm5dn6vpm_270x270.png",
-      "xhdpi": "https://s3.amazonaws.com/gonativeio/app_files/wqdmda/1707423771343_g7ygm5trg66cj_360x360.png",
-      "xxhdpi": "https://s3.amazonaws.com/gonativeio/app_files/wqdmda/1707423771382_fzxmyqavjdgy2_540x540.png",
-      "xxxhdpi": "https://s3.amazonaws.com/gonativeio/app_files/wqdmda/1707423771401_a51f9h9jyrvb6_720x720.png"
-    },
     "transitionInteractiveDelayMax": 0.2,
     "menuAnimationDuration": 0.15,
-    "androidShowSplash": true,
     "disableAnimations": false,
     "hideWebviewAlpha": 0.5,
     "iosDarkMode": "auto",
@@ -323,8 +304,6 @@
     "androidSwipeNavigationBackgroundColorDark": "#333333",
     "androidSwipeNavigationActiveColorDark": "#FFFFFF",
     "androidSwipeNavigationInactiveColorDark": "#666666",
-    "androidSplashBackgroundColor": "#FFFFFF",
-    "androidSplashBackgroundColorDark": "#000000",
     "androidWebviewTextZoom": null,
     "androidIcon": "https://s3.amazonaws.com/gonativeio/app_files/wqdmda/app_icon_1707423770.png",
     "iosIcon": "https://s3.amazonaws.com/gonativeio/app_files/wqdmda/app_icon_1707423770.png",
@@ -340,7 +319,56 @@
     "navigationTitleImageLocationDark": "assets/defaults/app-icon-placeholder.png",
     "androidHeaderImage": "assets/defaults/app-icon-placeholder.png",
     "androidHeaderImageDark": "assets/defaults/app-icon-placeholder.png",
-    "iosHeaderImageDark": "https://s3.amazonaws.com/gonativeio/app_files/wqdmda/app_icon_1707423770.png"
+    "iosHeaderImageDark": "https://s3.amazonaws.com/gonativeio/app_files/wqdmda/app_icon_1707423770.png",
+    "splashScreen": {
+      "ios": {
+        "backgroundColor": "#FFFFFF",
+        "backgroundColorDark": "#000000",
+        "backgroundImage": "https://s3.amazonaws.com/gonativeio/app_files/wqdmda/1707423770890_226k1m3p7neep_FFFFFF_1_2x2.png",
+        "backgroundImageDark": "https://s3.amazonaws.com/gonativeio/app_files/wqdmda/1707423770905_ga1qwkga7nj2u_000000_1_2x2.png",
+        "centerImageDark": "https://s3.amazonaws.com/gonativeio/app_files/wqdmda/app_icon_1707423770.png",
+        "centerImage": "https://s3.amazonaws.com/gonativeio/app_files/wqdmda/app_icon_1707423770.png",
+        "animationLoop": "once",
+        "animation": null,
+        "animationDark": null,
+        "animationFrame": null,
+        "animationFrameDark": null,
+        "animated": false
+      },
+      "android": {
+        "launchImages": {
+          "mdpi": "https://s3.amazonaws.com/gonativeio/app_files/wqdmda/1707423771151_g2h3pjhpjx72m_180x180.png",
+          "hdpi": "https://s3.amazonaws.com/gonativeio/app_files/wqdmda/1707423771165_mxjzyajwx47qe_270x270.png",
+          "xhdpi": "https://s3.amazonaws.com/gonativeio/app_files/wqdmda/1707423771182_e93r3t7d6251a_360x360.png",
+          "xxhdpi": "https://s3.amazonaws.com/gonativeio/app_files/wqdmda/1707423771203_vpj6crz8ht8u8_540x540.png",
+          "xxxhdpi": "https://s3.amazonaws.com/gonativeio/app_files/wqdmda/1707423771215_7g651mfcjwp64_720x720.png"
+        },
+        "launchImagesDark": {
+          "mdpi": "https://s3.amazonaws.com/gonativeio/app_files/wqdmda/1707423771250_ghp9qxh0nq54y_180x180.png",
+          "hdpi": "https://s3.amazonaws.com/gonativeio/app_files/wqdmda/1707423771294_8kacbm5dn6vpm_270x270.png",
+          "xhdpi": "https://s3.amazonaws.com/gonativeio/app_files/wqdmda/1707423771343_g7ygm5trg66cj_360x360.png",
+          "xxhdpi": "https://s3.amazonaws.com/gonativeio/app_files/wqdmda/1707423771382_fzxmyqavjdgy2_540x540.png",
+          "xxxhdpi": "https://s3.amazonaws.com/gonativeio/app_files/wqdmda/1707423771401_a51f9h9jyrvb6_720x720.png"
+        },
+        "backgroundColor": "#FFFFFF",
+        "backgroundColorDark": "#000000",
+        "showSplash": true,
+        "animationLoop": "once",
+        "animation": null,
+        "animationDark": null,
+        "animationFrame": null,
+        "animationFrameDark": null,
+        "animated": false
+      }
+    },
+    "customIcons": {},
+    "androidSystemNavBarColor": "#FFFFFF",
+    "androidSystemNavBarColorDark": "#000000",
+    "forceViewportWidth": null,
+    "pinchToZoom": null,
+    "iosDynamicType": null,
+    "iosTabBarInactiveColor": "#A1A1A1",
+    "iosTabBarInactiveColorDark": "#818181"
   },
   "permissions": {
     "usesGeolocation": false,
@@ -350,7 +378,8 @@
     "iosLocationUsageDescription": "",
     "iosCameraUsageDescription": "",
     "iOSATTUserTrackingDescription": "",
-    "iOSRequestATTConsentOnLoad": false
+    "iOSRequestATTConsentOnLoad": false,
+    "iosMicrophoneUsageDescription": ""
   },
   "developmentTools": {
     "enableWebConsoleLogs": false
@@ -358,6 +387,19 @@
   "services": {
     "oneSignal": {
       "active": false
+    }
+  },
+  "contextMenu": {
+    "linkActions": [
+      "copyLink",
+      "openExternal"
+    ],
+    "enabled": false
+  },
+  "allowZoom": null,
+  "security": {
+    "network": {
+      "allowInsecure": null
     }
   }
 }

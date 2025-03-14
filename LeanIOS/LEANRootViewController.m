@@ -67,6 +67,13 @@
     [super viewDidLoad];
 }
 
+- (void)handleJsNavigationUrl:(NSString *)url {
+    UIViewController *topController = [(UINavigationController *)self.contentViewController topViewController];
+    if ([topController isKindOfClass:[LEANWebViewController class]]) {
+        [((LEANWebViewController *)topController) handleJsNavigationUrl:url];
+    }
+}
+
 - (void)loadUrl:(NSURL *)url
 {
     UINavigationController *nav = (UINavigationController*)self.contentViewController;

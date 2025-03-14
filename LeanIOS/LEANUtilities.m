@@ -268,7 +268,7 @@
     " "
     "navigator.geolocation.getCurrentPosition = function(success, failure) { "
     "    if (typeof success === 'function') median_geolocation_variables.successFunctions.push(success); "
-    "    if (typeof failure === 'function') median_geolocation_variables.failureFunctions.push(success); "
+    "    if (typeof failure === 'function') median_geolocation_variables.failureFunctions.push(failure); "
     "    location.href = 'median://geolocationShim/requestLocation'; "
     "}; "
     " "
@@ -545,37 +545,53 @@
             [LEANUtilities injectJs:@"iosCustomJS" ToWebview:webview];
         }
         
-        // user script for viewport
-        {
-            NSString *stringViewport = [GoNativeAppConfig sharedAppConfig].stringViewport;
-            NSNumber *viewportWidth = [GoNativeAppConfig sharedAppConfig].forceViewportWidth;
-            NSString *pinchToZoom = [GoNativeAppConfig sharedAppConfig].pinchToZoom ? @"yes" : @"no";
-            
-            if (viewportWidth) {
-                stringViewport = [NSString stringWithFormat:@"width=%@,user-scalable=%@", viewportWidth, pinchToZoom];
-            }
-            
-            if (!stringViewport) {
-                stringViewport = @"";
-            }
-            
-            NSString *scriptSource = [NSString stringWithFormat:@"var gonative_setViewport = %@; var gonative_viewportElement = document.querySelector('meta[name=viewport]'); if (gonative_viewportElement) {   if (gonative_setViewport) {         gonative_viewportElement.content = gonative_setViewport;     } else {         gonative_viewportElement.content = gonative_viewportElement.content + ',user-scalable=%@';     } } else if (gonative_setViewport) {     gonative_viewportElement = document.createElement('meta');     gonative_viewportElement.name = 'viewport';     gonative_viewportElement.content = gonative_setViewport; document.head.appendChild(gonative_viewportElement);}", [LEANUtilities jsWrapString:stringViewport], pinchToZoom];
-            
-            WKUserScript *userScript = [[NSClassFromString(@"WKUserScript") alloc] initWithSource:scriptSource injectionTime:WKUserScriptInjectionTimeAtDocumentEnd forMainFrameOnly:YES];
-            [webview.configuration.userContentController addUserScript:userScript];
-        }
-        
         [((LEANAppDelegate *)[UIApplication sharedApplication].delegate).bridge loadUserScriptsForContentController:webview.configuration.userContentController];
         
         // for our faux content-inset
         webview.scrollView.layer.masksToBounds = NO;
         
-        // disable hard press to preview
-        webview.allowsLinkPreview = NO;
+        // hard press to preview - disabled via ContextMenuHandler
+        webview.allowsLinkPreview = YES;
         
         // set user agent
         webview.customUserAgent = [GoNativeAppConfig sharedAppConfig].userAgent;
     }
+}
+
+
++ (void)configureViewportOfWebView:(WKWebView *)webview {
+    NSNumber *viewportWidth = [GoNativeAppConfig sharedAppConfig].forceViewportWidth;
+    NSString *pinchToZoom = [GoNativeAppConfig sharedAppConfig].pinchToZoom ? @"yes" : @"no";
+    
+    NSString *stringViewport = @"";
+    if (viewportWidth) {
+        stringViewport = [NSString stringWithFormat:@"width=%@,user-scalable=%@", viewportWidth, pinchToZoom];
+    }
+    
+    if (!stringViewport) {
+        stringViewport = @"";
+    }
+    
+    NSString *scriptSource = [NSString stringWithFormat:
+        @"var gonative_setViewport = %@; "
+        "var gonative_viewportElement = document.querySelector('meta[name=viewport]'); "
+        "if (gonative_viewportElement) { "
+        "    if (gonative_setViewport) { "
+        "        gonative_viewportElement.content = gonative_setViewport; "
+        "    } else { "
+        "        gonative_viewportElement.content = gonative_viewportElement.content + ',user-scalable=%@'; "
+        "    } "
+        "} else if (gonative_setViewport) { "
+        "    gonative_viewportElement = document.createElement('meta'); "
+        "    gonative_viewportElement.name = 'viewport'; "
+        "    gonative_viewportElement.content = gonative_setViewport; "
+        "    document.head.appendChild(gonative_viewportElement); "
+        "}",
+        [LEANUtilities jsWrapString:stringViewport],
+        pinchToZoom
+    ];
+
+    [webview evaluateJavaScript:scriptSource completionHandler:nil];
 }
 
 +(void)removeDoubleTapFromView:(UIView *)view {
@@ -793,6 +809,66 @@
     }
     
     return [urlPath hasPrefix:cookiePath];
+}
+
++ (void)createRequestFromUrl:(NSURL *)url completion:(void (^)(NSURLRequest *request))completion {
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
+    
+    NSString *userAgent = [[GoNativeAppConfig sharedAppConfig] userAgentForUrl:url];
+    if (userAgent) {
+        [request setValue:userAgent forHTTPHeaderField:@"User-Agent"];
+    }
+    
+    if (![GoNativeAppConfig sharedAppConfig].useWKWebView) {
+        completion(request);
+        return;
+    }
+    
+    WKHTTPCookieStore *cookieStore = [WKWebsiteDataStore defaultDataStore].httpCookieStore;
+    [cookieStore getAllCookies:^(NSArray<NSHTTPCookie *> * _Nonnull cookies) {
+        NSMutableArray *cookiesToSend = [NSMutableArray array];
+        for (NSHTTPCookie *cookie in cookies) {
+            if ([self cookie:cookie matchesUrl:url]) {
+                [cookiesToSend addObject:cookie];
+            }
+        }
+        
+        NSDictionary *headerFields = [NSHTTPCookie requestHeaderFieldsWithCookies:cookiesToSend];
+        NSString *cookieHeader = headerFields[@"Cookie"];
+        if (cookieHeader) {
+            [request addValue:cookieHeader forHTTPHeaderField:@"Cookie"];
+        }
+        
+        completion(request);
+    }];
+}
+
++ (void)downloadUrl:(NSURL *)url filename:(NSString *)filename directory:(NSURL *)directory completion:(void (^)(NSURL *fileUrl))completion {
+    if (url.isFileURL) {
+        return completion(url);
+    }
+    
+    [self createRequestFromUrl:url completion:^(NSURLRequest *request) {
+        NSURLSessionDownloadTask *task = [[NSURLSession sharedSession] downloadTaskWithRequest:request completionHandler:^(NSURL *location, NSURLResponse *response, NSError *error) {
+            if (error || !location) {
+                return completion(nil);
+            }
+            
+            NSError *moveError;
+            NSURL *destination = [directory URLByAppendingPathComponent:filename];
+            
+            [[NSFileManager defaultManager] removeItemAtURL:destination error:nil];
+            [[NSFileManager defaultManager] moveItemAtURL:location toURL:destination error:&moveError];
+            
+            if (moveError) {
+                return completion(nil);
+            }
+            
+            completion(destination);
+        }];
+        
+        [task resume];
+    }];
 }
 
 @end
